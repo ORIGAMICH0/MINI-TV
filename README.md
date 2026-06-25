@@ -1,61 +1,71 @@
-# MiniTV · 个人创意工作流画布
+<div align="center">
 
-LibTV 的最小个人版：无限画布 + 节点工作流，三个模型全部通过**本地代理**即时出图/出片。
+# 🌊 MiniTV
 
-## 目录结构
+**无限画布 + 节点工作流的本地 AI 创意生产工具**
+
+把「文本 / 场景 / 姿势 / 图片 / 视频 / 分镜」摆上画布，连线即组合，一键出图出片。
+为海外手游广告素材生产而设计，也适用于任何需要可视化编排 AI 生成的场景。
+
+纯原生 JS + Python 标准库 · 零第三方依赖 · 本地运行 · 自带 API 不外泄
+
+![License](https://img.shields.io/badge/license-MIT-green)
+![No Dependencies](https://img.shields.io/badge/dependencies-0-blue)
+![Python](https://img.shields.io/badge/python-stdlib%20only-yellow)
+
+</div>
+
+---
+
+## 📸 截图
+
+<div align="center">
+<img src="docs/screenshot.png" width="920" alt="MiniTV 画布全景">
+<br>
+<i>一条完整工作流：场景 → 分镜脚本 → 三视图 / 九宫格分镜 / 资产图 → 视频出片</i>
+</div>
+
+---
+
+## ✨ 功能
+
+- **无限画布**：平移 / 缩放 / 框选 / 节点整体等比缩放，节点即「作品卡片」，参数就地展开不挡画布。
+- **节点串联即组合**：连线把上游输出喂给下游——文字作上下文、场景作风格指令、骨架作姿势参考、图片作图生图参考、分镜图作视频首尾帧。多级自动回溯。
+- **图片生成**：文生图 + 图生图（参考图）；内置预设 —— 角色三视图 / 人物特写 / 资产图 / 故事板单帧。
+- **场景节点**：风格 / 地图 / 机位 / 角度 / 光线 五维结构化控制，选项库可自定义，设置沿连线向下继承。
+- **姿势骨架节点**：2.5D 火柴人编辑器，拖关节摆姿势、拖空白旋转视角看空间、骨长按人体比例锁定；输出骨架参考图 + 姿势描述（软引导）。
+- **视频生成**：文生视频 + 上游图片作首/尾帧。
+- **多宫格分镜**：N×M 网格批量出图，支持全局统一风格 prompt、从分镜脚本一键填格。
+- **文案 / 脚本**：内置剧情脚本 / 分镜脚本 / 钩子文案 / 资产清单 等 AI 预设。
+- **中文友好**：prompt 直接写中文，提交时自动转成出图级英文（带缓存）。
+- **素材库**：每次生成自动落盘归档，刷新不丢图。
+- **多引擎**：OpenAI gpt-image / Gemini（Nano Banana）/ Seedance 视频，每个节点可单独选引擎。
+
+## 🧱 架构
+
 ```
-MINI TV/
-├─ MiniTV.html     主程序（零密钥，浏览器打开）
-├─ proxy.py        本地代理（零密钥，加 CORS，从 config.json 读配置）
-├─ 初始化配置.py    首次使用的配置向导 → 生成 config.json
-├─ 初始化配置.bat   双击运行配置向导
-├─ start.bat       一键启动代理
-├─ config.json     你的私密配置（运行向导后生成；勿外发）
-└─ README.md       本说明
+浏览器 (MiniTV.html, 零密钥编排)  ──HTTP──>  本机 proxy.py (执行引擎, 持配置)  ──>  各家 AI API
 ```
 
-## 首次使用（只需一次）
-**双击 `初始化配置.bat`**（或命令行 `python 初始化配置.py`），按提示填入你自己的：
-- API key（OpenAI / Gemini / Seedance，只填你有的，没有就回车跳过）
-- 端点 / 中转地址（用官方直接回车用默认；用中转就填它给的地址）
-- 网络代理（如果访问墙外 API 需要科学上网，填如 `http://127.0.0.1:7890`，否则回车跳过）
+- **`MiniTV.html`** 是编排控制台：纯原生 JS，无任何外部依赖，不含密钥，可安全分享。
+- **`proxy.py`** 是执行引擎：仅 Python 标准库（无需 pip），带 CORS，统一调度三个引擎，并解决浏览器跨域问题。
+- 所有密钥只存在你本机的 `config.json` 与 proxy 运行时内存里；代理只监听 `127.0.0.1`，不对外。
 
-填完会生成 `config.json`。**没运行过它直接启动 proxy 会提示"尚未配置"。**
+## 🚀 快速开始
 
-## 怎么用（每次）
-1. **双击 `start.bat`** 启动本地代理，保持那个黑窗口开着（横幅会显示各引擎 OK/缺失）。
-2. 浏览器打开 **`MiniTV.html`**（密码默认 `tkoo`）。
-3. 左上角圆点变绿 = 代理已连上。图片节点点「🎨 生成」，视频节点点「🎬 生成视频」。
+> 需要 [Python 3](https://www.python.org/downloads/)（Windows 安装时勾选 "Add Python to PATH"）。
 
-## 三个引擎
-- **OpenAI**（默认出图）：官方 gpt-image-1，质量高、稍慢。
-- **Gemini**：Nano Banana，快且便宜。左上角下拉随时切换出图引擎。
-- **Seedance**：视频，异步 1–3 分钟，自动轮询，完成后内嵌播放。
+1. **下载本仓库**（Code → Download ZIP，或 `git clone`）。
+2. **配置自己的 API**：双击 `初始化配置.bat`（或 `python 初始化配置.py`），按提示填入你有的引擎 key、端点/中转地址、网络代理（如需）。生成 `config.json`。
+3. **启动代理**：双击 `start.bat`，保持黑窗口开着（横幅会显示各引擎 OK / 缺失）。
+4. **打开应用**：浏览器打开 `MiniTV.html`，左上角圆点变绿即代理已连上。
+5. 拖个图片节点 → ⚙ 参数里写 prompt → 🎨 生成。
 
-## 密钥从哪来（重要）
-proxy.py 与 MiniTV.html **都不含任何密钥**。配置读取优先级：
-1. **环境变量**（`OPENAI_API_KEY` / `GEMINI_API_KEY` / `SEEDANCE_API_KEY` / `OPENAI_BASE_URL` / `MINITV_HTTP_PROXY` 等）
-2. **`config.json`**（运行 `初始化配置.py` 生成 —— 推荐方式）
-3. **records 回退**（兼容旧版从本地 MCP 源目录读取；没有此目录则自动跳过）
+## 🔑 配置
 
-## 分发给别人（重要）
-本工程可直接打包发给别人用，因为没有内置任何 key：
-- 要发的：`MiniTV.html`、`proxy.py`、`初始化配置.py`、`初始化配置.bat`、`start.bat`、`README.md`
-- **不要发**：`config.json`（你的明文 key）、`assets/`（你生成的素材）——这两个是你的私密内容
-- 对方拿到后：双击 `初始化配置.bat` 填自己的 key → `start.bat` → 打开 HTML，即可用。
+三个引擎都是可选的，只填你有的。读取优先级：**环境变量 > `config.json` > 旧版本地回退**。
 
-## 安全说明（必读）
-- `MiniTV.html`、`proxy.py` 本身**不含密钥**，可安全分享。
-- key 只在 `config.json`（本机私密文件）和 proxy 运行时内存里，代理只监听 `127.0.0.1`，不对外。
-- 密码门只防肩窥，挡不住看源码的人——真正的鉴权请在 proxy.py 里加（后期）。
-- `config.json` 含明文 key，**勿外发、勿随工程分享**。
-
-## 改配置
-- 改 key / 端点 / 中转 / 网络代理 / 模型：重新运行 `初始化配置.py`（覆盖 config.json），或手动编辑 `config.json`。
-- 切换默认出图引擎 / 改密码：编辑 `MiniTV.html` 顶部 `CONFIG`（每个节点也可单独选引擎）。
-- 改端口：环境变量 `MINITV_PROXY_PORT`。
-
-## config.json 格式
+`config.json` 格式：
 ```json
 {
   "openai":   {"api_key": "sk-...", "base_url": "https://api.openai.com/v1"},
@@ -66,4 +76,35 @@ proxy.py 与 MiniTV.html **都不含任何密钥**。配置读取优先级：
   "http_proxy": "http://127.0.0.1:7890"
 }
 ```
-每个引擎都可选，只填你有的。
+- `base_url`：用官方就用默认；用中转/代理服务就填它给的地址。
+- `http_proxy`：访问墙外 API 需科学上网时填（如 `http://127.0.0.1:7890`），不需要就省略。
+- 改端口：环境变量 `MINITV_PROXY_PORT`。
+
+## 🔒 安全
+
+- `MiniTV.html`、`proxy.py` 本身**不含任何密钥**，可安全公开 / 分享。
+- key 只在 `config.json`（你的私密文件）和 proxy 运行时内存里。
+- 仓库已带 `.gitignore`，**`config.json` 永远不会被提交**——但请始终注意不要手动上传它。
+- 默认无访问密码。想加简易门（仅防肩窥）：编辑 `MiniTV.html` 顶部 `CONFIG.gatePassword`。真正的鉴权需在 `proxy.py` 服务端实现。
+
+## 🗂 节点类型
+
+| 节点 | 作用 | 连给下游时 |
+|---|---|---|
+| 文本 / 脚本 | 创意、脚本（含 AI 预设生成） | 作为 prompt 上下文 |
+| 钩子 | 短文案 | 作为 prompt 上下文 |
+| 场景 | 风格/机位/光线等结构化设置 | 拼进主 prompt，可继承 |
+| 姿势骨架 | 2.5D 摆姿势 | 骨架图作参考 + 姿势描述进 prompt |
+| 图片 | 出图（文生图/图生图/预设） | 图作下游参考图 / 视频首尾帧 |
+| 多宫格分镜 | 批量分镜出图 | 各格图作参考 |
+| 视频 | 出片 | — |
+
+## ⚠️ 说明
+
+- 姿势骨架是**软引导**（无 ControlNet），姿势还原约 7–8 成，不保证逐关节精确。
+- Seedance 视频为异步生成，约 1–3 分钟，自动轮询。
+- 多宫格为串行出图，量大较慢。
+
+## 📄 License
+
+[MIT](LICENSE) © 2026 ORIGAMICH0
