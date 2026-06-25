@@ -20,7 +20,7 @@
 ## 📸 截图
 
 <div align="center">
-<img src="docs/screenshot.png" width="920" alt="MiniTV 画布全景">
+<img src="docs/screenshot.PNG" width="920" alt="MiniTV 画布全景">
 <br>
 <i>一条完整工作流：场景 → 分镜脚本 → 三视图 / 九宫格分镜 / 资产图 → 视频出片</i>
 </div>
