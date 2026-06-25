@@ -1,0 +1,15 @@
+# 私密配置（含明文 API key）—— 绝不提交
+config.json
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 生成的素材（你的创作内容）
+assets/
+
+# 依赖 / 杂项
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

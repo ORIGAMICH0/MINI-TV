@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniTV · 个人创意工作流画布</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c2230; --line:#2a3140;
+    --txt:#e6edf3; --dim:#8b949e; --accent:#3fb7ff; --accent2:#ffb454;
+    --green:#3fb950; --red:#f85149; --purple:#bc8cff;
+  }
+  *{box-sizing:border-box; font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);overflow:hidden;}
+  button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--txt);
+    border-radius:6px;padding:5px 10px;font-size:12px;transition:.12s;}
+  button:hover{border-color:var(--accent);color:var(--accent);}
+  button:disabled{opacity:.5;cursor:default;}
+  button.primary{background:var(--accent);color:#06121e;border-color:var(--accent);font-weight:600;}
+  button.primary:hover{filter:brightness(1.1);color:#06121e;}
+  textarea,input,select{background:#0b0f14;color:var(--txt);border:1px solid var(--line);
+    border-radius:5px;padding:5px 7px;font-size:12px;width:100%;resize:vertical;font-family:inherit;}
+  textarea:focus,input:focus,select:focus{outline:none;border-color:var(--accent);}
+
+  #app{display:flex;height:100%;}
+  #side{width:248px;flex:0 0 248px;background:var(--panel);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;overflow:hidden;}
+  #side h1{font-size:15px;margin:0;padding:13px 14px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:7px;}
+  #side h1 .v{font-size:10px;color:var(--dim);font-weight:400;}
+  #provbar{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;font-size:11px;}
+  #provbar select{width:auto;flex:1;}
+  #provbar .dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:0 0 auto;}
+  #provbar .dot.on{background:var(--green);} #provbar .dot.off{background:var(--red);}
+  .sect{border-bottom:1px solid var(--line);}
+  .sect>.hd{padding:9px 14px;font-size:12px;color:var(--dim);font-weight:600;cursor:pointer;
+    display:flex;justify-content:space-between;align-items:center;user-select:none;}
+  .sect>.hd:hover{color:var(--txt);}
+  .sect .body{padding:4px 12px 12px;display:none;}
+  .sect.open .body{display:block;}
+  .sect .body.scroll{max-height:240px;overflow:auto;}
+
+  #main{flex:1;position:relative;overflow:hidden;}
+  #toolbar{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:30;
+    background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:6px;
+    display:flex;gap:5px;box-shadow:0 6px 24px rgba(0,0,0,.4);}
+  #zoominfo{position:absolute;bottom:12px;left:12px;z-index:30;font-size:11px;color:var(--dim);
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 9px;}
+  #hint{position:absolute;bottom:12px;right:12px;z-index:30;font-size:11px;color:var(--dim);
+    background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 10px;max-width:340px;line-height:1.5;}
+
+  #canvas{position:absolute;inset:0;cursor:grab;background:
+    radial-gradient(circle, #1b2230 1px, transparent 1px);background-size:26px 26px;}
+  #canvas.panning{cursor:grabbing;}
+  #world{position:absolute;top:0;left:0;transform-origin:0 0;}
+  #edges{position:absolute;top:0;left:0;width:60000px;height:60000px;overflow:visible;pointer-events:none;}
+  #edges path{fill:none;stroke:var(--accent);stroke-width:2;pointer-events:stroke;cursor:pointer;}
+  #edges path.tmp{stroke:var(--accent2);stroke-dasharray:5 4;}
+  #edges path.e-img{stroke:var(--purple);}
+  #edges path.e-pend{stroke-dasharray:6 4;opacity:.75;}
+  #edges path:hover{stroke:var(--red);}
+
+  .node{position:absolute;width:230px;background:var(--panel);border:1px solid var(--line);
+    border-radius:9px;box-shadow:0 4px 16px rgba(0,0,0,.35);user-select:none;
+    display:flex;flex-direction:column;font-size:12px;
+    transform-origin:0 0;} /* 调大小=整卡等比缩放（transform scale），布局永不重排 */
+  .node textarea,.node input,.node select,.node button{font-size:1em;}
+  .node.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(63,183,255,.3),0 4px 16px rgba(0,0,0,.4);}
+  .node .nhd{padding:7px 9px;font-size:1em;font-weight:600;cursor:move;border-radius:9px 9px 0 0;
+    display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--line);flex:0 0 auto;}
+  .node .nhd .tag{font-size:.75em;padding:1px 5px;border-radius:4px;font-weight:700;}
+  .node .nhd .title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .node .nhd .x{cursor:pointer;color:var(--dim);font-size:14px;line-height:1;padding:0 2px;}
+  .node .nhd .x:hover{color:var(--red);}
+  .node .nbody{padding:8px 9px;display:flex;flex-direction:column;gap:6px;flex:1;min-height:0;overflow:auto;}
+  .node .nbody>*{flex:0 0 auto;} /* 非主输入区不收缩，防止压矮时内容互相叠 */
+  .node .nbody textarea.grow{flex:1 1 auto;min-height:4em;} /* 节点拉高时主输入框自动吃满；em 随字号缩 */
+  .node .nbody>div:has(>textarea.grow),.node .nbody>.gridcells{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+  .node .nbody>.gridcells{display:grid;}
+  .node .nbody img{max-height:24em;object-fit:contain;}   /* 媒体也用 em 上限，随字号缩放 */
+  .node .nbody video{max-height:24em;}
+  .gridcells img{max-height:10em;object-fit:cover;}
+  .node .row{display:flex;gap:6px;}
+  .node .row>*{flex:1;}
+  .node .lbl{font-size:.85em;color:var(--dim);margin-bottom:-2px;}
+  .node .flag{font-size:.8em;color:var(--accent2);cursor:pointer;border:1px solid var(--line);
+    border-radius:4px;padding:1px 5px;}
+  .node .flag.on{background:var(--accent2);color:#1a1206;border-color:var(--accent2);}
+
+  .node .rsz{position:absolute;right:-2px;bottom:-2px;width:1.2em;height:1.2em;cursor:nwse-resize;
+    border-right:2px solid var(--dim);border-bottom:2px solid var(--dim);border-radius:0 0 8px 0;opacity:.45;}
+  .node .rsz:hover{opacity:1;border-color:var(--accent);}
+  /* 作品卡片模式：第一层只看成品，参数在右键/双击的面板里 */
+  .node .ntag{position:absolute;top:6px;left:6px;z-index:6;font-size:.78em;padding:1px 7px;border-radius:4px;font-weight:700;pointer-events:none;opacity:.92;}
+  .node .nx{position:absolute;top:3px;right:7px;z-index:6;color:var(--dim);cursor:pointer;font-size:1.15em;line-height:1;display:none;text-shadow:0 1px 3px rgba(0,0,0,.8);}
+  .node:hover .nx{display:block;}
+  .node .nx:hover{color:var(--red);}
+  .ncard{min-height:64px;display:flex;flex-direction:column;cursor:move;}
+  .ncard img,.ncard video{width:100%;display:block;border-radius:8px;}
+  .ncard .ph{padding:28px 14px;text-align:center;color:var(--dim);font-size:.9em;line-height:1.7;}
+  .ncard .ntxt{padding:26px 12px 10px;font-size:.95em;line-height:1.55;white-space:pre-wrap;max-height:22em;overflow:hidden;color:var(--txt);}
+  .ncard .mosaic{display:grid;gap:2px;border-radius:8px;overflow:hidden;}
+  .ncard .mosaic img{border-radius:0;cursor:pointer;}
+  .ncard .mosaic .empty{background:var(--panel2);min-height:46px;}
+  .nstat{font-size:.8em;padding:3px 9px 5px;min-height:1.1em;color:var(--dim);}
+  .nbar{display:flex;gap:5px;padding:0 7px 7px;}
+  .nbar button{flex:1;font-size:.85em;padding:4px 6px;}
+  .npanel{border-top:1px solid var(--line);padding:8px 9px;display:flex;flex-direction:column;gap:8px;
+    background:var(--panel2);border-radius:0 0 9px 9px;cursor:default;}
+  .loader{margin:26px auto;width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #marquee{position:absolute;border:1px dashed var(--accent);background:rgba(63,183,255,.08);
+    z-index:40;display:none;pointer-events:none;}
+
+  .port{position:absolute;width:1.1em;height:1.1em;border-radius:50%;background:var(--panel2);
+    border:2px solid var(--accent);top:50%;margin-top:-.55em;z-index:5;cursor:crosshair;}
+  .port:hover{background:var(--accent);}
+  .port.in{left:-.55em;border-color:var(--green);}
+  .port.in:hover{background:var(--green);}
+  .port.out{right:-.55em;}
+
+  .t-text{background:#21364d;color:#7cc4ff;}
+  .t-image{background:#3a2a4d;color:#c9a4ff;}
+  .t-video{background:#4d3320;color:#ffba70;}
+  .t-grid{background:#1f4035;color:#62d6a8;}
+  .t-hook{background:#4d2030;color:#ff8fb0;}
+  .t-scene{background:#163e4d;color:#7adfff;}
+  .t-pose{background:#3d3416;color:#ffe07a;}
+  #posecv{background:#0b0f14;border:1px solid var(--line);border-radius:8px;cursor:crosshair;touch-action:none;display:block;margin:0 auto;}
+
+  .gridcells{display:grid;gap:4px;flex:1;min-height:0;grid-auto-rows:minmax(0,1fr);align-content:stretch;}
+  .gridcells textarea{font-size:.85em;padding:3px 4px;min-height:2.6em;flex:1;}
+
+  .libitem{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;
+    margin-bottom:6px;font-size:11px;line-height:1.4;position:relative;cursor:pointer;}
+  .libitem:hover{border-color:var(--accent);}
+  .libitem .cat{font-size:9px;color:var(--accent2);}
+  .libitem .del{position:absolute;right:5px;top:4px;color:var(--dim);font-size:12px;}
+  .libitem .del:hover{color:var(--red);}
+  .tmplitem{display:flex;justify-content:space-between;align-items:center;background:var(--panel2);
+    border:1px solid var(--line);border-radius:6px;padding:6px 8px;margin-bottom:6px;font-size:11px;gap:6px;}
+  .tmplitem .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tmplitem button{padding:3px 7px;font-size:10px;}
+
+  #mask{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:center;justify-content:center;}
+  #mask.show{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:680px;
+    max-width:92vw;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;}
+  .modal .mhd{padding:12px 16px;border-bottom:1px solid var(--line);font-size:14px;font-weight:600;
+    display:flex;justify-content:space-between;align-items:center;}
+  .modal .mbody{padding:14px 16px;overflow:auto;}
+  .modal .mft{padding:11px 16px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;}
+  #specout{width:100%;height:340px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;line-height:1.5;}
+  .smallnote{font-size:11px;color:var(--dim);line-height:1.6;}
+  .fillrow{margin-bottom:10px;}
+  .fillrow .lbl{font-size:11px;color:var(--accent);margin-bottom:3px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <h1>🌊 MiniTV <span class="v">个人创意工作流画布</span></h1>
+
+    <div id="provbar">
+      <span class="dot" id="proxydot"></span>
+      <span>出图引擎</span>
+      <select id="provsel">
+        <option value="openai">OpenAI</option>
+        <option value="gemini">Gemini</option>
+      </select>
+    </div>
+
+    <div class="sect open" data-sect="lib">
+      <div class="hd">竞品 / 钩子库 <span>▾</span></div>
+      <div class="body scroll">
+        <div class="row" style="display:flex;gap:5px;margin-bottom:8px;">
+          <select id="libcat" style="flex:1.2;">
+            <option value="钩子">钩子 Hook</option>
+            <option value="卖点">卖点 Selling</option>
+            <option value="风格">风格 Style</option>
+            <option value="竞品">竞品 Ref</option>
+          </select>
+          <button id="addlib" style="flex:0 0 auto;">+ 入库</button>
+        </div>
+        <input id="libtext" placeholder="输入一条钩子/卖点/风格/竞品…" style="margin-bottom:8px;">
+        <div id="liblist"></div>
+      </div>
+    </div>
+
+    <div class="sect open" data-sect="tmpl">
+      <div class="hd">工作流模板 <span>▾</span></div>
+      <div class="body scroll">
+        <button id="savetmpl" style="width:100%;margin-bottom:8px;">＋ 把当前画布存为模板</button>
+        <div id="tmpllist"></div>
+        <div class="smallnote" style="margin-top:6px;">套用模板时，标记为「输入位」的文本节点会弹表单让你换词复用。</div>
+      </div>
+    </div>
+
+    <div class="sect open" data-sect="file">
+      <div class="hd">存档 / 备份 <span>▾</span></div>
+      <div class="body">
+        <button id="exportjson" style="width:100%;margin-bottom:6px;">⬇ 导出工作流 .json（备份）</button>
+        <button id="importjson" style="width:100%;margin-bottom:6px;">⬆ 导入工作流 .json</button>
+        <button id="clearall" style="width:100%;color:var(--red);border-color:#5a2b2b;">🗑 清空画布</button>
+        <input type="file" id="fileinput" accept=".json" style="display:none;">
+        <div class="smallnote" style="margin-top:8px;">出图/出片需先双击 start.bat 启动本地代理。画布自动存本浏览器。</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="toolbar">
+      <button data-add="text">＋ 文本/脚本</button>
+      <button data-add="scene">＋ 场景</button>
+      <button data-add="pose">＋ 姿势骨架</button>
+      <button data-add="image">＋ 图片</button>
+      <button data-add="video">＋ 视频</button>
+      <button data-add="grid">＋ 多宫格分镜</button>
+      <span style="width:1px;background:var(--line);margin:0 2px;"></span>
+      <button id="fit">居中</button>
+      <button class="primary" id="export">⚡ 导出 run-spec</button>
+    </div>
+    <div id="canvas"><div id="world"><svg id="edges"><g id="edgeg"></g></svg></div></div>
+    <div id="marquee"></div>
+    <div id="zoominfo">缩放 100%</div>
+    <div id="hint"><b style="color:var(--accent2)">双击 / 右键节点 = 参数面板</b> · 拖卡片=移动 · 拖右下角=等比缩放 · 中键拖空白=框选（Delete批量删）· 拖空白=平移 · 滚轮=缩放 · <b style="color:var(--accent)">右蓝点</b>→<b style="color:var(--green)">左绿点</b>=连线 · 点连线=删除<br><b style="color:var(--accent)">蓝线</b>=文字流 · <b style="color:var(--purple)">紫线</b>=图片流（参考图/首尾帧）· 虚线=上游待出图</div>
+  </div>
+</div>
+
+<div id="mask"><div class="modal">
+  <div class="mhd"><span id="mtitle">标题</span><span class="x" id="mclose" style="cursor:pointer;color:var(--dim);">✕</span></div>
+  <div class="mbody" id="mbody"></div>
+  <div class="mft" id="mft"></div>
+</div></div>
+
+<script>
+"use strict";
+/* ===================================================================
+   配置区 —— 本文件不含任何 API 密钥。
+   所有密钥都在本地代理 proxy.py 里（从你现有 MCP 配置读取）。
+   出图/出片前请先双击 start.bat 启动代理。
+   =================================================================== */
+const CONFIG={
+  proxy:"http://localhost:8787",   // 本地代理地址（start.bat 启动）
+  provider:"openai",               // 默认出图引擎：openai | gemini（界面左上也可切）
+  gatePassword:""                  // 留空=不需要密码直接进入（分享版已关闭密码门）
+};
+
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const uid=()=>Math.random().toString(36).slice(2,9);
+
+/* ---------- state ---------- */
+const LS={wf:"mtv_workflow_v2", tmpl:"mtv_templates_v2", lib:"mtv_library_v2", prov:"mtv_prov_v2", gate:"mtv_gate_v1", scene:"mtv_sceneopts_v1"};
+let nodes=[], edges=[];
+let view={x:200,y:140,scale:1};
+let templates=[], library=[];
+let selIds=new Set();
+function refreshSel(){$$(".node").forEach(x=>x.classList.toggle("sel",selIds.has(x.dataset.id)));}
+
+const TAGS={text:["t-text","文本"],image:["t-image","图片"],video:["t-video","视频"],grid:["t-grid","分镜"],hook:["t-hook","钩子"],scene:["t-scene","场景"],pose:["t-pose","骨架"]};
+const GMODEL={"自动":"gemini-2.5-flash-image","flash":"gemini-3.1-flash-image-preview","pro(带参考图)":"gemini-3-pro-image-preview"};
+/* 每节点引擎选择：一个下拉管到底；「跟随全局」= 用左侧栏的全局开关 */
+const ENGINE_OPTS={
+  "跟随全局（侧栏）":null,
+  "OpenAI (gpt-image-1)":{provider:"openai"},
+  "Gemini 自动":{provider:"gemini",model:"gemini-2.5-flash-image"},
+  "Gemini flash":{provider:"gemini",model:"gemini-3.1-flash-image-preview"},
+  "Gemini pro（参考图强）":{provider:"gemini",model:"gemini-3-pro-image-preview"}
+};
+function resolveEngine(n){
+  const o=ENGINE_OPTS[n.data.engine||"跟随全局（侧栏）"];
+  if(o)return {provider:o.provider,model:o.model};
+  return {provider:CONFIG.provider,model:CONFIG.provider==="gemini"?GMODEL[n.data.model||"自动"]:undefined};
+}
+
+/* ---------- P1 预设系统 ---------- */
+const TEXT_PRESETS={
+  "无":null,
+  "剧情脚本":{sys:"你是资深海外手游广告编剧，为海战策略手游 The King of Ocean (TKOO) 的英文市场写广告创意。输出精炼、可直接执行。",
+    usr:"基于上下文，写一个15-30秒的广告短片剧情脚本。结构：钩子(0-3秒抓眼)→冲突→反转→CTA行动号召。每段给出：时间轴、英文画面描述、中文说明。最后单独给出CTA文案（英文+中文）。"},
+  "分镜脚本":{sys:"你是资深海外手游广告分镜师，为海战策略手游 The King of Ocean (TKOO) 设计广告分镜。",
+    usr:"基于上下文，写广告短片分镜脚本，共6-9个镜头。严格按以下格式逐行输出（方便程序解析，不要加其他装饰）：\n镜1 | 时长秒数 | 机位 | English visual prompt for AI image generation\n镜2 | …\n要求：每行最后一段必须是可直接喂给AI出图工具的英文画面prompt（含主体/动作/光线/构图）。全部镜头输出完后，另起一段给中文翻译对照。"},
+  "钩子文案":{sys:"你是海外手游买量文案专家，擅长 Facebook/TikTok 英文钩子。",
+    usr:"基于上下文，输出8条英文广告钩子文案（每条不超过90字符，编号列出），每条下一行附中文翻译。风格多样：好奇缺口/挑战/损失厌恶/数字冲击等。"},
+  "资产清单":{sys:"你是游戏广告美术统筹。",
+    usr:"基于上下文，提取制作这条广告需要的视觉资产清单，分四类：角色、道具、场景、UI元素。每项格式：英文名称 — 一句英文外观描述 — 中文翻译。"}
+};
+/* 预设函数签名 (p, hasRef)：p=用户主体描述；hasRef=是否带上游参考图（追加身份锁定句） */
+const _ID_LOCK=" Use the reference image as the exact identity source: keep the same face, hairstyle, outfit, colors and body proportions. No changes to identity.";
+const IMG_PRESETS={
+  "无":null,
+  "三视图(角色)":(p,r)=>`Production character turnaround sheet. For EVERY character listed below, show that character in three labeled views: FRONT, SIDE PROFILE, BACK — full body, neutral standing pose, arms relaxed. If multiple characters are listed, give each character its own horizontal row of three views, all rows in the same sheet. Within each character's row, keep face, hairstyle, outfit, colors and proportions identical across the three views. Plain light gray studio background, soft even lighting. High-detail game concept art. Characters: ${p}.`+(r?_ID_LOCK:""),
+  "人物特写(头像)":(p,r)=>`Cinematic close-up portrait, head and shoulders, sharp detailed faces and eyes, dramatic key lighting, shallow depth of field, high-detail game key art. Include EVERY character listed below in one composition (single character fills the frame; multiple characters share one cinematic group shot). Characters: ${p}.`+(r?_ID_LOCK:""),
+  "资产图(道具/场景)":(p,r)=>`Game asset reference sheet. For EVERY subject listed below, show that subject in three labeled views: FRONT, THREE-QUARTER, BACK. If multiple subjects are listed, give each subject its own horizontal row, all rows in the same sheet. Plain neutral background, soft studio lighting, no text, no scene clutter. Keep each subject's design, materials and colors identical across its views. High-detail game concept art. Subjects: ${p}.`+(r?" Match the design of the reference image exactly.":""),
+  "故事板单帧":(p,r)=>`Storyboard frame, rough cinematic sketch, grayscale with one minimal color accent, strong silhouettes and readable action, film composition. Scene: ${p}.`
+};
+
+/* ---------- P2 场景节点：五维结构化场景控制（预置=出厂值，用户可在「场景选项库」增删，存 localStorage） ---------- */
+const DEFAULT_SCENE_OPTS={
+  "风格":{"电影写实":"cinematic photorealistic, dramatic film lighting",
+          "卡通Q版":"stylized chibi cartoon, bright saturated colors, playful",
+          "暗黑油画":"dark oil painting style, heavy brushstrokes, somber palette",
+          "美漫":"western comic book style, bold ink lines, halftone shading",
+          "像素风":"retro 16-bit pixel art style"},
+  "地图场景":{"暴风雨外海":"stormy open ocean, towering waves, dark thunderclouds",
+          "海盗港口":"pirate harbor town, wooden docks, taverns, moored sailing ships",
+          "海军基地":"imperial navy base, stone fortress walls, cannons, disciplined fleet",
+          "漩涡战场":"giant whirlpool battlefield, swirling sea, floating wreckage",
+          "冰海":"frozen arctic sea, icebergs, pale cold light",
+          "舰桥内部":"warship bridge interior, wooden helm, sea charts, swinging lanterns"},
+  "机位":{"超广角全景":"ultra wide establishing shot",
+          "中景":"medium shot",
+          "特写":"close-up shot",
+          "航拍俯瞰":"aerial top-down view",
+          "水面低角度":"dramatic low angle from the water surface",
+          "第一人称舰桥":"first-person view from the ship's bridge"},
+  "角度":{"平视":"eye-level angle",
+          "仰拍":"low angle looking up, heroic and imposing",
+          "俯拍":"high angle looking down",
+          "荷兰角":"dutch angle, tilted horizon, tension"},
+  "光线":{"黄昏逆光":"golden hour backlight, glowing rim light",
+          "暴雨闪电":"heavy rain, lightning flashes, harsh contrast",
+          "正午烈日":"harsh midday sunlight, hard shadows",
+          "夜战火光":"night battle lit by cannon fire and flames, orange glow on dark water"}
+};
+let SCENE_OPTS=JSON.parse(JSON.stringify(DEFAULT_SCENE_OPTS)); // 运行时副本，load() 时被用户库覆盖
+function saveSceneOpts(){try{localStorage.setItem(LS.scene,JSON.stringify(SCENE_OPTS));}catch(e){}}
+const SCENE_DIMS=[["style","风格"],["map","地图场景"],["cam","机位"],["ang","角度"],["light","光线"]];
+/* 维度值 → prompt 片段：库内选项查表；「✎xxx」= 节点内联自定义，原文直用（中文提交时自动转英） */
+function dimFrag(dim,v){
+  if(!v||v==="无"||v==="跟随上游")return "";
+  if(String(v).startsWith("✎"))return String(v).slice(1).trim();
+  return (SCENE_OPTS[dim]&&SCENE_OPTS[dim][v])||"";
+}
+function dimLabel(v){
+  if(!v||v==="无")return "无";
+  if(String(v).startsWith("✎"))return "✎"+String(v).slice(1).trim().slice(0,16);
+  return v;
+}
+function composeScene(n){
+  const parts=[];
+  SCENE_DIMS.forEach(([k,dim])=>{const f=dimFrag(dim,n.data[k]);if(f)parts.push(f);});
+  if((n.data.custom||"").trim())parts.push(n.data.custom.trim());
+  return parts.join(", ");
+}
+function sceneSummary(n){
+  const parts=[];
+  SCENE_DIMS.forEach(([k,dim])=>{const v=n.data[k];if(v&&v!=="无")parts.push(dim+"·"+dimLabel(v));});
+  if((n.data.custom||"").trim())parts.push("自定义·"+n.data.custom.trim().slice(0,30));
+  return parts.length?parts.join("\n"):"（双击 / 右键 配置场景）";
+}
+/* ── 拍摄设置继承链：每个生成节点都有五维设置，「跟随上游」= 沿连线向上找第一个有值的祖先 ── */
+function nodeDim(n,k){
+  if(n.type==="scene")return n.data[k]||"无";          // 场景节点：自己的值就是源头
+  return (n.data.scn&&n.data.scn[k])||"跟随上游";       // 生成节点：默认跟随上游
+}
+function resolveDim(id,k,seen){
+  seen=seen||new Set();if(seen.has(id))return "无";seen.add(id);
+  const n=nodes.find(x=>x.id===id);if(!n)return "无";
+  const v=nodeDim(n,k);
+  if(v!=="跟随上游")return v;
+  for(const e of edges.filter(e=>e.to===id)){
+    const r=resolveDim(e.from,k,seen);
+    if(r&&r!=="无")return r;
+  }
+  return "无";
+}
+function resolveCustom(id,seen){ // 场景节点「自定义补充」的继承
+  seen=seen||new Set();if(seen.has(id))return "";seen.add(id);
+  const n=nodes.find(x=>x.id===id);if(!n)return "";
+  if(n.type==="scene"&&(n.data.custom||"").trim())return n.data.custom.trim();
+  for(const e of edges.filter(e=>e.to===id)){
+    const r=resolveCustom(e.from,seen);if(r)return r;
+  }
+  return "";
+}
+/* 本节点最终生效的拍摄修饰词（自身覆盖 > 继承上游 > 无；支持库选项与 ✎ 内联自定义） */
+function effectiveSceneFrag(n){
+  const parts=[];
+  SCENE_DIMS.forEach(([k,dim])=>{
+    const f=dimFrag(dim,resolveDim(n.id,k));
+    if(f)parts.push(f);
+  });
+  const cu=resolveCustom(n.id);
+  if(cu)parts.push(cu);
+  return parts.join(", ");
+}
+
+/* ---------- P3 姿势骨架节点：15 关节火柴人，双通道输出（骨架PNG参考图 + 姿势英文描述） ---------- */
+const POSE_JOINTS=["head","neck","sho_l","sho_r","elb_l","elb_r","han_l","han_r","pelvis","hip_l","hip_r","kne_l","kne_r","foo_l","foo_r"];
+const POSE_BONES=[["neck","head"],["neck","sho_l"],["sho_l","elb_l"],["elb_l","han_l"],
+  ["neck","sho_r"],["sho_r","elb_r"],["elb_r","han_r"],["neck","pelvis"],
+  ["pelvis","hip_l"],["hip_l","kne_l"],["kne_l","foo_l"],
+  ["pelvis","hip_r"],["hip_r","kne_r"],["kne_r","foo_r"]];
+/* 关节坐标为 [x,y,z]：x左右 / y上下 / z前后(0.5=中心,大=靠近镜头)。2.5D：视角可绕Y轴旋转 */
+const POSE_PRESETS={
+  "站立":{desc:"standing upright, relaxed, facing camera",
+    j:{head:[.5,.08,.5],neck:[.5,.18,.5],sho_l:[.38,.2,.5],sho_r:[.62,.2,.5],elb_l:[.34,.35,.5],elb_r:[.66,.35,.5],han_l:[.32,.5,.5],han_r:[.68,.5,.5],pelvis:[.5,.5,.5],hip_l:[.43,.52,.5],hip_r:[.57,.52,.5],kne_l:[.42,.72,.5],kne_r:[.58,.72,.5],foo_l:[.41,.92,.5],foo_r:[.59,.92,.5]}},
+  "奔跑":{desc:"running, mid-stride, dynamic motion, leaning forward",
+    j:{head:[.55,.1,.6],neck:[.52,.2,.55],sho_l:[.42,.22,.65],sho_r:[.6,.22,.4],elb_l:[.34,.3,.78],elb_r:[.66,.3,.28],han_l:[.4,.4,.85],han_r:[.6,.18,.2],pelvis:[.5,.5,.5],hip_l:[.44,.52,.62],hip_r:[.56,.52,.4],kne_l:[.4,.66,.78],kne_r:[.6,.64,.3],foo_l:[.36,.82,.85],foo_r:[.64,.6,.22]}},
+  "挥砍":{desc:"swinging a sword overhead, powerful attack stance",
+    j:{head:[.48,.1,.55],neck:[.48,.2,.5],sho_l:[.38,.22,.45],sho_r:[.6,.2,.6],elb_l:[.3,.32,.4],elb_r:[.62,.1,.7],han_l:[.34,.44,.42],han_r:[.6,.02,.8],pelvis:[.5,.5,.5],hip_l:[.43,.52,.55],hip_r:[.58,.52,.45],kne_l:[.38,.72,.6],kne_r:[.64,.7,.4],foo_l:[.34,.92,.62],foo_r:[.7,.9,.38]}},
+  "指挥":{desc:"pointing forward commandingly, one arm extended toward camera",
+    j:{head:[.46,.1,.55],neck:[.47,.2,.5],sho_l:[.37,.22,.45],sho_r:[.58,.22,.55],elb_l:[.32,.34,.4],elb_r:[.6,.24,.75],han_l:[.34,.46,.4],han_r:[.62,.26,.95],pelvis:[.48,.5,.5],hip_l:[.42,.52,.52],hip_r:[.55,.52,.48],kne_l:[.4,.72,.55],kne_r:[.58,.72,.45],foo_l:[.38,.92,.55],foo_r:[.6,.92,.45]}},
+  "瞭望":{desc:"hand shielding eyes, looking into the distance",
+    j:{head:[.5,.09,.5],neck:[.5,.19,.5],sho_l:[.39,.21,.5],sho_r:[.61,.21,.5],elb_l:[.34,.34,.5],elb_r:[.58,.22,.6],han_l:[.32,.48,.5],han_r:[.52,.1,.62],pelvis:[.5,.5,.5],hip_l:[.44,.52,.5],hip_r:[.57,.52,.5],kne_l:[.43,.72,.5],kne_r:[.58,.72,.5],foo_l:[.42,.92,.5],foo_r:[.59,.92,.5]}},
+  "倒地":{desc:"fallen on the ground, lying defeated, top-down",
+    j:{head:[.2,.7,.5],neck:[.3,.72,.5],sho_l:[.32,.66,.6],sho_r:[.34,.78,.4],elb_l:[.42,.6,.65],elb_r:[.44,.84,.35],han_l:[.5,.58,.7],han_r:[.52,.9,.3],pelvis:[.6,.75,.5],hip_l:[.6,.68,.6],hip_r:[.62,.82,.4],kne_l:[.76,.66,.65],kne_r:[.78,.84,.35],foo_l:[.9,.62,.7],foo_r:[.92,.88,.3]}},
+  "举旗":{desc:"raising a flag high with both hands, triumphant",
+    j:{head:[.5,.14,.5],neck:[.5,.22,.5],sho_l:[.4,.24,.5],sho_r:[.6,.24,.5],elb_l:[.36,.14,.55],elb_r:[.64,.14,.55],han_l:[.42,.04,.6],han_r:[.58,.04,.6],pelvis:[.5,.52,.5],hip_l:[.44,.54,.5],hip_r:[.57,.54,.5],kne_l:[.43,.73,.5],kne_r:[.58,.73,.5],foo_l:[.42,.93,.5],foo_r:[.59,.93,.5]}}
+};
+function clonePose(name){return JSON.parse(JSON.stringify((POSE_PRESETS[name]||POSE_PRESETS["站立"]).j));}
+function J3(p){return [p[0],p[1],p.length>2?p[2]:.5];} // 兼容旧 2D 存档
+/* 骨骼层级（根=pelvis）+ 标准骨长（从站立姿势固化，保证人体比例）→ 拖关节时骨长恒定 */
+const POSE_PARENT={neck:"pelvis",head:"neck",sho_l:"neck",sho_r:"neck",elb_l:"sho_l",elb_r:"sho_r",han_l:"elb_l",han_r:"elb_r",hip_l:"pelvis",hip_r:"pelvis",kne_l:"hip_l",kne_r:"hip_r",foo_l:"kne_l",foo_r:"kne_r"};
+const POSE_CHILDREN=(()=>{const ch={};POSE_JOINTS.forEach(k=>ch[k]=[]);Object.entries(POSE_PARENT).forEach(([c,p])=>ch[p].push(c));return ch;})();
+const BONE_LEN=(()=>{const st=POSE_PRESETS["站立"].j,L={};Object.entries(POSE_PARENT).forEach(([c,p])=>{const a=J3(st[c]),b=J3(st[p]);L[c]=Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);});return L;})();
+function poseDescendants(k){const out=[];(function rec(x){POSE_CHILDREN[x].forEach(c=>{out.push(c);rec(c);});})(k);return out;}
+/* FK 拖拽：把关节 k 移向 target，保持 k 到父的标准骨长（绕父旋转），子树整体平移跟随；拖根=整体平移 */
+function poseDragTo(j,k,target){
+  const par=POSE_PARENT[k];
+  if(!par){const d=[target[0]-j[k][0],target[1]-j[k][1],target[2]-j[k][2]];
+    POSE_JOINTS.forEach(q=>{j[q]=[j[q][0]+d[0],j[q][1]+d[1],j[q][2]+d[2]];});return;}
+  const pp=j[par];let dir=[target[0]-pp[0],target[1]-pp[1],target[2]-pp[2]];
+  const len=Math.hypot(dir[0],dir[1],dir[2])||1e-6;const bl=BONE_LEN[k];
+  const np=[pp[0]+dir[0]/len*bl,pp[1]+dir[1]/len*bl,pp[2]+dir[2]/len*bl];
+  const d=[np[0]-j[k][0],np[1]-j[k][1],np[2]-j[k][2]];
+  poseDescendants(k).forEach(q=>{j[q]=[j[q][0]+d[0],j[q][1]+d[1],j[q][2]+d[2]];});
+  j[k]=np;
+}
+function mirrorPose(j){const m={};POSE_JOINTS.forEach(k=>{const p=J3(j[k]||[.5,.5,.5]);const swap=k.endsWith("_l")?k.slice(0,-2)+"_r":k.endsWith("_r")?k.slice(0,-2)+"_l":k;m[swap]=[1-p[0],p[1],p[2]];});return m;}
+/* 绕 Y 轴旋转 yaw 投影到屏幕：返回 {key:[sx,sy,depth]}，depth 大=靠近镜头 */
+function projPose(j,yaw){const cy=Math.cos(yaw),sy=Math.sin(yaw),o={};
+  POSE_JOINTS.forEach(k=>{const p=J3(j[k]||[.5,.5,.5]);const dx=p[0]-.5,dz=p[2]-.5;
+    o[k]=[.5+(dx*cy+dz*sy),p[1],(-dx*sy+dz*cy)];});return o;}
+/* 关节坐标 → 白底黑线骨架 PNG（按 yaw 投影 + 深度排序，纯线稿喂AI） */
+function renderSkeleton(j,yaw,W,H){
+  yaw=(yaw==null)?0.3:yaw;W=W||512;H=H||640;
+  const cv=document.createElement("canvas");cv.width=W;cv.height=H;
+  const c=cv.getContext("2d");c.fillStyle="#fff";c.fillRect(0,0,W,H);
+  const P=projPose(j,yaw);c.strokeStyle="#111";c.lineCap="round";
+  POSE_BONES.map(([a,b])=>({a,b,d:(P[a][2]+P[b][2])/2})).sort((x,y)=>x.d-y.d)
+    .forEach(({a,b,d})=>{c.lineWidth=Math.max(3,W/64)*(1+d*0.5);c.beginPath();c.moveTo(P[a][0]*W,P[a][1]*H);c.lineTo(P[b][0]*W,P[b][1]*H);c.stroke();});
+  c.fillStyle="#111";const r=Math.max(4,W/52);
+  POSE_JOINTS.map(k=>({k,p:P[k]})).sort((x,y)=>x.p[2]-y.p[2])
+    .forEach(({k,p})=>{c.beginPath();c.arc(p[0]*W,p[1]*H,(k==="head"?r*2.2:r)*(1+p[2]*0.4),0,7);c.fill();});
+  return cv.toDataURL("image/png");
+}
+function poseDesc(n){
+  const base=(n.data.desc||"").trim()||"a character in a custom pose";
+  const view=n.data.view==="侧面"?"side view":"front view";
+  return `${base}, ${view}, follow this stick-figure skeleton pose reference`;
+}
+/* 直接上游（1跳）骨架节点的姿势文字 → 拼进下游主 prompt（骨架图走 upstreamImages） */
+function upstreamPose(id){const out=[];
+  edges.filter(e=>e.to===id).forEach(e=>{const n=nodes.find(x=>x.id===e.from);
+    if(n&&n.type==="pose")out.push(poseDesc(n));});
+  return out.join("; ");}
+
+const DEFAULT_LIB=[
+  {id:uid(),cat:"钩子",text:"开局就被巨浪掀翻——你能在30秒内救回舰队吗？"},
+  {id:uid(),cat:"钩子",text:"99%的船长都在第3关沉没，你呢？"},
+  {id:uid(),cat:"卖点",text:"真实物理海战 · 上百种战舰自由改装"},
+  {id:uid(),cat:"卖点",text:"无需联网也能玩 · 离线也能征服海洋"},
+  {id:uid(),cat:"风格",text:"电影级写实海面、暴风雨光影、低角度仰拍战舰"},
+  {id:uid(),cat:"风格",text:"卡通Q版萌系海盗、明亮高饱和、UI弹窗夸张"},
+  {id:uid(),cat:"竞品",text:"竞品参考：某海战SLG首图——大Boss章鱼缠船+红色警告UI"},
+];
+
+/* ---------- persistence ---------- */
+/* base64 大图不进 localStorage；已落盘素材的 http 引用保留（刷新不丢图） */
+function lean(ns){return ns.map(n=>{const c=JSON.parse(JSON.stringify(n));
+  if(c.data&&c.data.result&&String(c.data.result).startsWith("data:"))delete c.data.result;
+  if(c.data&&c.data.preview&&String(c.data.preview).startsWith("data:"))delete c.data.preview;
+  if(c.data&&Array.isArray(c.data.cells))c.data.cells.forEach(x=>{if(x.result&&String(x.result).startsWith("data:"))delete x.result;});
+  return c;});}
+function save(){try{localStorage.setItem(LS.wf,JSON.stringify({nodes:lean(nodes),edges,view}));}catch(e){}}
+function saveTmpl(){localStorage.setItem(LS.tmpl,JSON.stringify(templates.map(t=>({...t,nodes:lean(t.nodes)}))));}
+function saveLib(){localStorage.setItem(LS.lib,JSON.stringify(library));}
+function load(){
+  try{const w=JSON.parse(localStorage.getItem(LS.wf));if(w){nodes=w.nodes||[];edges=w.edges||[];view=w.view||view;}}catch(e){}
+  try{templates=JSON.parse(localStorage.getItem(LS.tmpl))||[];}catch(e){templates=[];}
+  try{library=JSON.parse(localStorage.getItem(LS.lib));}catch(e){library=null;}
+  if(!library) library=DEFAULT_LIB.slice();
+  try{const so=JSON.parse(localStorage.getItem(LS.scene));
+    if(so&&typeof so==="object"&&Object.keys(so).length)SCENE_OPTS=so;}catch(e){}
+  const p=localStorage.getItem(LS.prov); if(p)CONFIG.provider=p;
+}
+
+/* ---------- node factory ---------- */
+function defaultData(type){
+  if(type==="text") return {title:"创意/脚本",content:"",isInput:false,preset:"无"};
+  if(type==="image") return {title:"图片节点",prompt:"",aspect:"9:16",model:"自动",ref:"",preset:"无",engine:"跟随全局（侧栏）"};
+  if(type==="video") return {title:"视频节点",prompt:"",aspect:"9:16",duration:8,frame:"无"};
+  if(type==="grid")  return {title:"多宫格分镜",rows:3,cols:3,aspect:"1:1",gprompt:"",engine:"跟随全局（侧栏）",cells:Array.from({length:9},(_,i)=>({label:"镜"+(i+1),prompt:""}))};
+  if(type==="hook")  return {title:"钩子",content:"",cat:"钩子"};
+  if(type==="scene") return {title:"场景",style:"电影写实",map:"暴风雨外海",cam:"超广角全景",ang:"平视",light:"黄昏逆光",custom:"",preview:""};
+  if(type==="pose")  return {title:"姿势骨架",joints:clonePose("站立"),view:"正面",yaw:0.3,desc:POSE_PRESETS["站立"].desc};
+}
+function addNode(type,wx,wy,data){const n={id:uid(),type,x:wx,y:wy,data:data||defaultData(type)};nodes.push(n);renderNodes();save();return n;}
+function centerWorld(){const r=$("#canvas").getBoundingClientRect();return {x:(r.width/2-view.x)/view.scale-115,y:(r.height/2-view.y)/view.scale-60};}
+
+/* ---------- rendering ---------- */
+const world=$("#world"), edgeg=$("#edgeg");
+function applyView(){world.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.scale})`;$("#zoominfo").textContent="缩放 "+Math.round(view.scale*100)+"%";}
+function renderNodes(){$$(".node").forEach(e=>e.remove());nodes.forEach(n=>world.appendChild(buildNode(n)));drawEdges();}
+function field(labelText){const d=document.createElement("div");if(labelText){const l=document.createElement("div");l.className="lbl";l.textContent=labelText;d.appendChild(l);}return d;}
+/* 节点缩放模型：n.s = 整卡等比缩放系数（0.45~3，默认1）。布局以基准宽度排版，transform 缩放，比例永不变 */
+
+/* ── 作品卡片模式：第一层只显示成品（图/视频/分镜马赛克/文字），参数在 右键/双击 的面板里 ── */
+const RUNTIME={}; // id -> {msg,color,busy}（生成过程态，不持久化）
+function setStatus(n,msg,color){const r=RUNTIME[n.id]=RUNTIME[n.id]||{};r.msg=msg||"";r.color=color||"var(--dim)";
+  const el=nodeEl(n.id);if(el){const st=el.querySelector(".nstat");if(st){st.textContent=r.msg;st.style.color=r.color;}}}
+function setBusy(n,b){const r=RUNTIME[n.id]=RUNTIME[n.id]||{};r.busy=!!b;rerenderNode(n);}
+function rerenderNode(n){const old=nodeEl(n.id);if(old)world.replaceChild(buildNode(n),old);drawEdges();}
+function ph(t){const d=document.createElement("div");d.className="ph";d.textContent=t;return d;}
+
+function buildNode(n){
+  const el=document.createElement("div");
+  el.className="node"+(selIds.has(n.id)?" sel":"");el.dataset.id=n.id;
+  el.style.left=n.x+"px";el.style.top=n.y+"px";
+  if(n.w&&!n.s){n.s=Math.min(3,Math.max(.5,n.w/230));delete n.w;delete n.h;} // 旧存档迁移
+  if(n.s&&n.s!==1)el.style.transform="scale("+n.s+")";
+  if(n.type==="grid")el.style.width=Math.max(250,110*n.data.cols+30)+"px"; // 基准宽度；缩放走 transform
+  const [tagcls,tagtxt]=TAGS[n.type];
+  const tag=document.createElement("span");tag.className="ntag "+tagcls;tag.textContent=tagtxt;
+  tag.title=n.data.title||tagtxt;el.appendChild(tag);
+  const x=document.createElement("span");x.className="nx";x.textContent="✕";x.title="删除节点";
+  x.onclick=e=>{e.stopPropagation();selIds.delete(n.id);nodes=nodes.filter(q=>q.id!==n.id);edges=edges.filter(ed=>ed.from!==n.id&&ed.to!==n.id);renderNodes();save();};
+  el.appendChild(x);
+  const card=document.createElement("div");card.className="ncard";
+  const rt=RUNTIME[n.id];
+  if(rt&&rt.busy){
+    card.appendChild(Object.assign(document.createElement("div"),{className:"loader"}));
+  }else if(n.type==="image"){
+    if(n.data.result){const im=document.createElement("img");im.src=n.data.result;card.appendChild(im);}
+    else card.appendChild(ph("双击 / 右键\n设置参数并生成"));
+  }else if(n.type==="video"){
+    if(n.data.video){const v=document.createElement("video");v.src=n.data.video;v.controls=true;card.appendChild(v);}
+    else card.appendChild(ph("双击 / 右键\n设置参数并生成视频"));
+  }else if(n.type==="grid"){
+    const has=(n.data.cells||[]).some(c=>c.result);
+    if(has){
+      const g=document.createElement("div");g.className="mosaic";g.style.gridTemplateColumns=`repeat(${n.data.cols},1fr)`;
+      n.data.cells.forEach((c,i)=>{
+        if(c.result){const im=document.createElement("img");im.src=c.result;im.title=(c.label||("镜"+(i+1)))+"（点击打开/下载）";
+          im.onclick=e=>{e.stopPropagation();if(c.result.startsWith("data:"))download((n.data.title||"grid")+"_"+(c.label||("镜"+(i+1)))+".png",dataURLtoBlob(c.result));else window.open(c.result,"_blank");};
+          g.appendChild(im);}
+        else g.appendChild(Object.assign(document.createElement("div"),{className:"empty"}));
+      });
+      card.appendChild(g);
+    }else card.appendChild(ph(`${n.data.rows}×${n.data.cols} 分镜\n双击 / 右键 编辑与生成`));
+  }else if(n.type==="scene"){
+    if(n.data.preview){const im=document.createElement("img");im.src=n.data.preview;card.appendChild(im);}
+    const t=document.createElement("div");t.className="ntxt";t.style.fontSize=".85em";
+    t.textContent=sceneSummary(n);card.appendChild(t);
+  }else if(n.type==="pose"){
+    const im=document.createElement("img");im.src=renderSkeleton(n.data.joints||clonePose("站立"),n.data.yaw);card.appendChild(im);
+    const t=document.createElement("div");t.className="ntxt";t.style.fontSize=".82em";
+    t.textContent="🦴 "+(n.data.desc||"自定义姿势")+"（"+(n.data.view||"正面")+"）";card.appendChild(t);
+  }else{ // text / hook
+    const t=document.createElement("div");t.className="ntxt";
+    t.textContent=n.data.content||"（双击 / 右键 编辑内容）";card.appendChild(t);
+  }
+  el.appendChild(card);
+  const st=document.createElement("div");st.className="nstat";
+  if(rt&&rt.msg){st.textContent=rt.msg;st.style.color=rt.color;}
+  el.appendChild(st);
+  /* 卡片常驻按钮排：⚙ 参数（就地展开） + 类型对应的生成动作 */
+  const bar=document.createElement("div");bar.className="nbar";
+  const cog=document.createElement("button");cog.textContent=(rt&&rt.open)?"▲ 参数":"⚙ 参数";
+  cog.onclick=e=>{e.stopPropagation();toggleNodeEditor(n);};
+  bar.appendChild(cog);
+  const ACT={image:["🎨 生成",()=>genImage(n)],video:["🎬 生成",()=>genVideo(n)],
+             grid:["🎨 生成空格",()=>genGrid(n)],scene:["👁 预览",()=>genScenePreview(n)],
+             text:["⚡ AI生成",()=>genTextCard(n)],pose:["✎ 编辑姿势",()=>toggleNodeEditor(n,true)]}[n.type];
+  if(ACT){const act=document.createElement("button");act.className="primary";act.textContent=ACT[0];
+    act.onclick=e=>{e.stopPropagation();ACT[1]();};bar.appendChild(act);}
+  el.appendChild(bar);
+  if(rt&&rt.open){
+    el.style.width=Math.max(340,n.type==="grid"?(110*n.data.cols+30):0)+"px";
+    el.appendChild(buildEditorPanel(n));
+  }
+  const pin=document.createElement("div");pin.className="port in";pin.dataset.role="in";pin.dataset.id=n.id;
+  const pout=document.createElement("div");pout.className="port out";pout.dataset.role="out";pout.dataset.id=n.id;
+  el.appendChild(pin);el.appendChild(pout);
+  const rs=document.createElement("div");rs.className="rsz";rs.title="拖动=整体等比缩放";
+  rs.addEventListener("mousedown",e=>{e.stopPropagation();e.preventDefault();resizing={n,sx:e.clientX,s0:n.s||1,w0:el.offsetWidth};});
+  el.appendChild(rs);
+  el.addEventListener("contextmenu",e=>{
+    if(/TEXTAREA|INPUT/.test(e.target.tagName))return; // 输入框保留原生右键菜单（粘贴等）
+    e.preventDefault();e.stopPropagation();toggleNodeEditor(n);});
+  el.addEventListener("dblclick",e=>{
+    if(/TEXTAREA|INPUT|SELECT|BUTTON|VIDEO/.test(e.target.tagName))return;
+    e.stopPropagation();toggleNodeEditor(n);});
+  return el;
+}
+
+/* 维度选择器单元：库内选项 + ✎ 内联自定义。store(v) 持久化；follow=true 时含「跟随上游」 */
+function dimCell(dim,cur,follow,store,effFn){
+  const cell=document.createElement("div");
+  const lb=document.createElement("div");lb.className="lbl";
+  const refresh=()=>{lb.textContent=dim+(effFn?"（生效："+dimLabel(effFn())+"）":"");};
+  refresh();cell.appendChild(lb);
+  const isC=String(cur).startsWith("✎");
+  const opts=(follow?["跟随上游"]:[]).concat(["无",...Object.keys(SCENE_OPTS[dim]||{}),"✎ 自定义…"]);
+  if(!isC&&!opts.includes(cur))opts.splice(opts.length-1,0,cur); // 已删库选项仍显示
+  const ci=document.createElement("input");ci.placeholder="自定义（中英皆可，自动转英）";
+  ci.style.cssText="margin-top:4px;display:"+(isC?"block":"none")+";";
+  ci.value=isC?String(cur).slice(1):"";
+  const s=sel(opts,isC?"✎ 自定义…":cur,v=>{
+    if(v==="✎ 自定义…"){ci.style.display="block";store("✎"+ci.value);}
+    else{ci.style.display="none";store(v);}
+    refresh();
+  });
+  ci.oninput=()=>{store("✎"+ci.value);refresh();};
+  cell.appendChild(s);cell.appendChild(ci);
+  return cell;
+}
+/* 拍摄设置选择器（图片/视频/宫格编辑器共用）：每维 跟随上游/无/选项库/✎自定义 */
+function buildShotSettings(n,wrap){
+  if(!n.data.scn)n.data.scn={};
+  const f=field("🎬 拍摄设置（不选=跟随上游：沿连线继承场景/上一个节点）");
+  const g=document.createElement("div");g.style.cssText="display:grid;grid-template-columns:1fr 1fr;gap:6px;";
+  SCENE_DIMS.forEach(([k,dim])=>{
+    g.appendChild(dimCell(dim,n.data.scn[k]||"跟随上游",true,
+      v=>{n.data.scn[k]=v;save();},
+      ()=>resolveDim(n.id,k)));
+  });
+  f.appendChild(g);wrap.appendChild(f);
+}
+
+/* 2.5D 骨架编辑器：拖关节摆姿势 / 拖空白转视角 / 滑块转视角。关节 [x,y,z]，绕Y轴旋转看空间感 */
+function buildPoseEditor(n,wrap){
+  if(!n.data.joints)n.data.joints=clonePose("站立");
+  if(n.data.yaw==null)n.data.yaw=0.3;
+  const r1=document.createElement("div");r1.className="row";
+  const pst=sel(["（套用预设…）",...Object.keys(POSE_PRESETS)],"（套用预设…）",v=>{
+    if(POSE_PRESETS[v]){n.data.joints=clonePose(v);n.data.desc=POSE_PRESETS[v].desc;draw();
+      const db=wrap.querySelector(".posedesc");if(db)db.value=n.data.desc;save();}});
+  const aa=field("套用预设姿势");aa.appendChild(pst);
+  r1.appendChild(aa);wrap.appendChild(r1);
+  const W=300,H=380;
+  const cv=document.createElement("canvas");cv.id="posecv";cv.width=W;cv.height=H;wrap.appendChild(cv);
+  const c=cv.getContext("2d");
+  let dragJ=null,rot=null;   // 必须在 draw 之前声明：draw() 立即调用会引用 dragJ（避免 TDZ 崩溃）
+  const draw=()=>{const P=projPose(n.data.joints,n.data.yaw);
+    c.fillStyle="#0b0f14";c.fillRect(0,0,W,H);
+    // 地面网格暗示空间
+    c.strokeStyle="rgba(95,208,255,.12)";c.lineWidth=1;
+    for(let i=0;i<=4;i++){c.beginPath();c.moveTo(0,H*(.55+i*.11));c.lineTo(W,H*(.55+i*.11));c.stroke();}
+    const shade=d=>{const t=Math.max(.25,Math.min(1,.6+d));return t;};
+    POSE_BONES.map(([a,b])=>({a,b,d:(P[a][2]+P[b][2])/2})).sort((x,y)=>x.d-y.d)
+      .forEach(({a,b,d})=>{const t=shade(d);c.strokeStyle=`rgba(95,208,255,${t})`;c.lineWidth=3*(1+d*0.6);c.lineCap="round";
+        c.beginPath();c.moveTo(P[a][0]*W,P[a][1]*H);c.lineTo(P[b][0]*W,P[b][1]*H);c.stroke();});
+    POSE_JOINTS.map(k=>({k,p:P[k]})).sort((x,y)=>x.p[2]-y.p[2])
+      .forEach(({k,p})=>{const t=shade(p[2]);c.fillStyle=k===dragJ?"#ff8fb0":`rgba(255,224,122,${t})`;
+        c.beginPath();c.arc(p[0]*W,p[1]*H,(k==="head"?10:6)*(1+p[2]*0.5),0,7);c.fill();});
+    c.fillStyle="rgba(230,237,243,.5)";c.font="11px sans-serif";c.fillText("视角 "+Math.round(n.data.yaw*180/Math.PI)+"°（拖空白旋转）",8,16);};
+  draw();
+  const pt=e=>{const r=cv.getBoundingClientRect();return [(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height];};
+  cv.addEventListener("mousedown",e=>{e.stopPropagation();const[x,y]=pt(e);
+    const P=projPose(n.data.joints,n.data.yaw);let best=null,bd=1;
+    POSE_JOINTS.forEach(k=>{const dx=P[k][0]-x,dy=P[k][1]-y;const d=dx*dx+dy*dy;if(d<bd){bd=d;best=k;}});
+    if(best&&bd<0.005){dragJ=best;draw();}else{rot={x:e.clientX,y0:n.data.yaw};}});
+  window.addEventListener("mousemove",e=>{
+    if(rot){n.data.yaw=rot.y0+(e.clientX-rot.x)*0.012;draw();return;}
+    if(!dragJ)return;const[x,y]=pt(e);
+    // 反投影：保持该关节当前 depth，把屏幕(x,y)换回世界目标坐标
+    const cy=Math.cos(n.data.yaw),sy=Math.sin(n.data.yaw);
+    const P=projPose(n.data.joints,n.data.yaw);const depth=P[dragJ][2];
+    const rx=Math.min(1,Math.max(0,x))-.5;
+    const target=[rx*cy-depth*sy+.5, Math.min(1,Math.max(0,y)), rx*sy+depth*cy+.5];
+    poseDragTo(n.data.joints,dragJ,target); // 骨长恒定，子树跟随
+    draw();});
+  window.addEventListener("mouseup",()=>{if(dragJ||rot){dragJ=null;rot=null;save();rerenderNode(n);}});
+  const r2=document.createElement("div");r2.className="row";
+  const mb=document.createElement("button");mb.textContent="⇄ 左右镜像";
+  mb.onclick=e=>{e.stopPropagation();n.data.joints=mirrorPose(n.data.joints);draw();save();rerenderNode(n);};
+  const fb=document.createElement("button");fb.textContent="◎ 正视角";
+  fb.onclick=e=>{e.stopPropagation();n.data.yaw=0;draw();save();rerenderNode(n);};
+  const rb=document.createElement("button");rb.textContent="↺ 重置站立";
+  rb.onclick=e=>{e.stopPropagation();n.data.joints=clonePose("站立");n.data.yaw=0.3;draw();save();rerenderNode(n);};
+  r2.appendChild(mb);r2.appendChild(fb);r2.appendChild(rb);wrap.appendChild(r2);
+  const da=document.createElement("textarea");da.className="posedesc";da.rows=2;da.value=n.data.desc||"";
+  da.placeholder="姿势文字描述（中英皆可，进下游主 prompt）";
+  da.oninput=()=>{n.data.desc=da.value;save();};
+  const df=field("姿势描述");df.appendChild(da);wrap.appendChild(df);
+  const note=document.createElement("div");note.className="smallnote";
+  note.textContent="拖关节摆姿势 · 拖空白处旋转视角看空间 · 转到不同角度可调前后深度(z)。导出给AI的参考图=当前视角。软引导，约7-8成还原。";
+  wrap.appendChild(note);
+}
+
+/* ── 就地展开参数面板（LibTV 式）：面板长在节点卡片下方，画布始终可拖可连线，无模态遮挡 ── */
+function toggleNodeEditor(n,open){
+  const r=RUNTIME[n.id]=RUNTIME[n.id]||{};
+  r.open=(open===undefined)?!r.open:open;
+  rerenderNode(n);
+}
+function buildEditorPanel(n){
+  const wrap=document.createElement("div");wrap.className="npanel";
+  const add=(label,elm)=>{const f=field(label);f.appendChild(elm);wrap.appendChild(f);return elm;};
+  const ti=document.createElement("input");ti.value=n.data.title||"";ti.placeholder="节点标题";
+  ti.oninput=()=>{n.data.title=ti.value;save();};add("节点标题",ti);
+  let btns=[];
+
+  if(n.type==="text"||n.type==="hook"){
+    const ta=document.createElement("textarea");ta.rows=8;ta.value=n.data.content||"";
+    ta.placeholder=n.type==="hook"?"钩子文案…":"创意说明 / 脚本 / 角色设定，会作为下游节点的上下文…";
+    ta.oninput=()=>{n.data.content=ta.value;save();};
+    add(n.type==="hook"?"钩子文案":"内容（文字流，输出给下游）",ta);
+    if(n.type==="text"){
+      const fl=document.createElement("span");fl.className="flag"+(n.data.isInput?" on":"");
+      fl.textContent="◧ 输入位（模板换词）";fl.title="标记后，套用模板时弹表单替换这段文字";
+      fl.onclick=()=>{n.data.isInput=!n.data.isInput;fl.classList.toggle("on");save();};wrap.appendChild(fl);
+      const psel=sel(Object.keys(TEXT_PRESETS),n.data.preset||"无",v=>{n.data.preset=v;save();});
+      add("预设（⚡AI生成 用：吃上游上下文写进本节点）",psel);
+      btns=[{t:"⚡ AI生成",cls:"primary",fn:()=>genTextCard(n)}];
+    }
+  }
+  if(n.type==="image"){
+    const ta=document.createElement("textarea");ta.rows=4;ta.value=n.data.prompt||"";
+    ta.oninput=()=>{n.data.prompt=ta.value;save();};
+    add("画面 prompt（可写中文，提交时自动转英文）",ta);
+    const row=document.createElement("div");row.className="row";
+    const asp=sel(["1:1","9:16","16:9","4:5","3:4","2:3"],n.data.aspect,v=>{n.data.aspect=v;save();});
+    const eng=sel(Object.keys(ENGINE_OPTS),n.data.engine||"跟随全局（侧栏）",v=>{n.data.engine=v;save();});
+    const a=field("比例");a.appendChild(asp);const b=field("生成引擎");b.appendChild(eng);
+    row.appendChild(a);row.appendChild(b);wrap.appendChild(row);
+    const psel=sel(Object.keys(IMG_PRESETS),n.data.preset||"无",v=>{n.data.preset=v;
+      if((v==="三视图(角色)"||v==="资产图(道具/场景)")&&n.data.aspect!=="16:9"){n.data.aspect="16:9";asp.value="16:9";flash("已自动切横版 16:9（多视图横排）");}
+      save();});
+    add("预设（三视图/特写/资产图/故事板）",psel);
+    buildShotSettings(n,wrap);
+    const ri=document.createElement("input");ri.value=n.data.ref||"";ri.placeholder="如：参考图1=角色脸";
+    ri.oninput=()=>{n.data.ref=ri.value;save();};add("参考图说明（可选）",ri);
+    const pv=document.createElement("span");pv.className="flag";pv.textContent="👁 预览最终发送的 prompt";
+    const pvout=document.createElement("textarea");pvout.readOnly=true;pvout.rows=6;pvout.style.display="none";
+    pv.onclick=()=>{pvout.style.display=pvout.style.display==="none"?"block":"none";
+      pvout.value=composeImagePrompt(n)+(n.data.lastEn?"\n\n———— 上次实际提交的英文版（自动翻译）————\n"+n.data.lastEn:"");};
+    wrap.appendChild(pv);wrap.appendChild(pvout);
+    btns=[{t:"⬇ 下载图",fn:()=>{const r=n.data.result;if(!r){flash("还没有图");return;}
+        if(r.startsWith("data:"))download((n.data.title||"image")+".png",dataURLtoBlob(r));else window.open(r,"_blank");}}];
+  }
+  if(n.type==="video"){
+    const ta=document.createElement("textarea");ta.rows=4;ta.value=n.data.prompt||"";
+    ta.oninput=()=>{n.data.prompt=ta.value;save();};
+    add("画面 prompt（可写中文，提交时自动转英文）",ta);
+    const row=document.createElement("div");row.className="row";
+    const asp=sel(["1:1","9:16","16:9"],n.data.aspect,v=>{n.data.aspect=v;save();});
+    const dur=document.createElement("input");dur.type="number";dur.value=n.data.duration;dur.min=1;dur.max=15;
+    dur.oninput=()=>{n.data.duration=+dur.value;save();};
+    const a=field("比例");a.appendChild(asp);const b=field("时长s");b.appendChild(dur);
+    row.appendChild(a);row.appendChild(b);wrap.appendChild(row);
+    buildShotSettings(n,wrap);
+    const note=document.createElement("div");note.className="smallnote";
+    note.textContent="上游连入的第1张图=首帧，第2张=尾帧（紫线）。";wrap.appendChild(note);
+    btns=[{t:"↗ 打开视频",fn:()=>{if(n.data.video)window.open(n.data.video,"_blank");else flash("还没有视频");}}];
+  }
+  if(n.type==="grid"){
+    const row=document.createElement("div");row.className="row";
+    const rr=document.createElement("input");rr.type="number";rr.value=n.data.rows;rr.min=1;rr.max=5;
+    const cc=document.createElement("input");cc.type="number";cc.value=n.data.cols;cc.min=1;cc.max=5;
+    const a=field("行");a.appendChild(rr);const b=field("列");b.appendChild(cc);
+    const asp=sel(["1:1","9:16","16:9","4:5","3:4"],n.data.aspect||"1:1",v=>{n.data.aspect=v;save();});
+    const c3=field("比例");c3.appendChild(asp);
+    row.appendChild(a);row.appendChild(b);row.appendChild(c3);wrap.appendChild(row);
+    const resizeGrid=()=>{n.data.rows=+rr.value;n.data.cols=+cc.value;const t=n.data.rows*n.data.cols;const old=n.data.cells;
+      n.data.cells=Array.from({length:t},(_,i)=>old[i]||{label:"镜"+(i+1),prompt:""});save();rerenderNode(n);};
+    rr.onchange=resizeGrid;cc.onchange=resizeGrid;
+    const eng=sel(Object.keys(ENGINE_OPTS),n.data.engine||"跟随全局（侧栏）",v=>{n.data.engine=v;save();});
+    add("生成引擎",eng);
+    buildShotSettings(n,wrap);
+    const gpta=document.createElement("textarea");gpta.rows=2;gpta.value=n.data.gprompt||"";
+    gpta.placeholder="如：cinematic naval battle, same warship and captain in all shots";
+    gpta.oninput=()=>{n.data.gprompt=gpta.value;save();};
+    add("全局 prompt（拼进每格：统一风格/主角）",gpta);
+    const fbtn=document.createElement("button");fbtn.textContent="📥 从上游脚本填格（解析 镜N|…）";
+    fbtn.onclick=()=>fillGridFromScript(n); // 内部 renderNodes 会重建面板
+    wrap.appendChild(fbtn);
+    const cellbox=document.createElement("div");
+    cellbox.style.cssText="display:grid;gap:5px;grid-template-columns:repeat("+n.data.cols+",1fr);";
+    n.data.cells.forEach((c,i)=>{
+      const cta=document.createElement("textarea");cta.rows=3;cta.value=c.prompt||"";
+      cta.placeholder=c.label||("镜"+(i+1));cta.style.fontSize="11px";
+      cta.oninput=()=>{c.prompt=cta.value;save();};cellbox.appendChild(cta);});
+    const cf=field("每格 prompt");cf.appendChild(cellbox);wrap.appendChild(cf);
+    btns=[{t:"↻ 清空已生成",fn:()=>{n.data.cells.forEach(q=>delete q.result);save();rerenderNode(n);flash("已清空，可重出");}}];
+  }
+  if(n.type==="scene"){
+    const sg=document.createElement("div");sg.style.cssText="display:grid;grid-template-columns:1fr 1fr;gap:6px;";
+    SCENE_DIMS.forEach(([k,dim])=>{
+      sg.appendChild(dimCell(dim,n.data[k]||"无",false,v=>{n.data[k]=v;save();},null));
+    });
+    wrap.appendChild(sg);
+    const mg=document.createElement("button");mg.textContent="⚙ 管理场景选项库（增删选项，全局生效）";
+    mg.onclick=()=>openSceneOptsManager(n);wrap.appendChild(mg);
+    const cu=document.createElement("textarea");cu.rows=2;cu.value=n.data.custom||"";
+    cu.placeholder="自定义补充（中英皆可，如：海面漂着燃烧的残骸）";
+    cu.oninput=()=>{n.data.custom=cu.value;save();};
+    add("自定义补充（可选）",cu);
+    const note=document.createElement("div");note.className="smallnote";
+    note.textContent="输出修饰词直接拼进下游主 prompt。预览图仅供确认风格，不传给下游。";
+    wrap.appendChild(note);
+  }
+  if(n.type==="pose"){
+    buildPoseEditor(n,wrap);
+  }
+  btns.push({t:"▲ 收起",fn:()=>toggleNodeEditor(n,false)});
+  const br=document.createElement("div");br.style.cssText="display:flex;gap:6px;";
+  btns.forEach(b=>{const bt=document.createElement("button");bt.textContent=b.t;if(b.cls)bt.className=b.cls;
+    bt.style.flex="1";bt.onclick=e=>{e.stopPropagation();b.fn();};br.appendChild(bt);});
+  wrap.appendChild(br);
+  return wrap;
+}
+function tagOf(n){return TAGS[n.type][1]+(n.data.title?" · "+n.data.title:"");}
+
+/* ── 场景选项库管理：每维增删条目，存 localStorage，所有场景节点共用 ── */
+function openSceneOptsManager(n){
+  const wrap=document.createElement("div");wrap.style.cssText="display:flex;flex-direction:column;gap:14px;";
+  SCENE_DIMS.forEach(([k,dim])=>{
+    if(!SCENE_OPTS[dim])SCENE_OPTS[dim]={};
+    const box=document.createElement("div");
+    const hd=document.createElement("div");hd.style.cssText="font-weight:600;margin-bottom:5px;color:var(--accent);font-size:13px;";
+    hd.textContent=dim;box.appendChild(hd);
+    const list=document.createElement("div");
+    const renderList=()=>{
+      list.innerHTML="";
+      Object.entries(SCENE_OPTS[dim]).forEach(([key,val])=>{
+        const row=document.createElement("div");
+        row.style.cssText="display:flex;gap:6px;align-items:center;margin-bottom:4px;font-size:12px;";
+        const kb=document.createElement("b");kb.style.cssText="flex:0 0 92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";kb.textContent=key;
+        const vs=document.createElement("span");vs.style.cssText="flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";vs.textContent=val;vs.title=val;
+        const del=document.createElement("span");del.textContent="✕";del.style.cssText="cursor:pointer;color:var(--dim);padding:0 4px;";
+        del.onmouseenter=()=>del.style.color="var(--red)";del.onmouseleave=()=>del.style.color="var(--dim)";
+        del.onclick=()=>{delete SCENE_OPTS[dim][key];saveSceneOpts();renderList();};
+        row.appendChild(kb);row.appendChild(vs);row.appendChild(del);list.appendChild(row);
+      });
+      if(!Object.keys(SCENE_OPTS[dim]).length){const e=document.createElement("div");e.className="smallnote";e.textContent="（此维度暂无选项）";list.appendChild(e);}
+    };
+    renderList();box.appendChild(list);
+    const addRow=document.createElement("div");addRow.style.cssText="display:flex;gap:6px;margin-top:3px;";
+    const ki=document.createElement("input");ki.placeholder="中文名";ki.style.cssText="flex:0 0 110px;";
+    const vi=document.createElement("input");vi.placeholder="prompt 片段（英文最佳；写中文提交时会自动转英）";vi.style.flex="1";
+    const ab=document.createElement("button");ab.textContent="＋";ab.style.flex="0 0 auto";
+    ab.onclick=()=>{const key=ki.value.trim(),val=vi.value.trim();
+      if(!key||!val){flash("中文名和片段都要填");return;}
+      SCENE_OPTS[dim][key]=val;saveSceneOpts();ki.value="";vi.value="";renderList();flash("已加入「"+dim+"」");};
+    addRow.appendChild(ki);addRow.appendChild(vi);addRow.appendChild(ab);box.appendChild(addRow);
+    wrap.appendChild(box);
+  });
+  openModal("⚙ 场景选项库（全局，所有场景节点共用）","",
+    [{t:"恢复出厂",fn:()=>{if(confirm("恢复出厂选项？你自己加的会全部丢失。")){
+        SCENE_OPTS=JSON.parse(JSON.stringify(DEFAULT_SCENE_OPTS));saveSceneOpts();closeModal();openSceneOptsManager(n);}}},
+     {t:"返回节点设置",cls:"primary",fn:()=>{closeModal();toggleNodeEditor(n,true);}}]);
+  const mb=$("#mbody");mb.innerHTML="";mb.appendChild(wrap);
+}
+function sel(opts,val,cb){const s=document.createElement("select");opts.forEach(o=>{const op=document.createElement("option");op.value=o;op.textContent=o;if(o===val)op.selected=true;s.appendChild(op);});s.onchange=()=>cb(s.value);return s;}
+function escapeHtml(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
+
+/* ---------- edges ---------- */
+function nodeEl(id){return world.querySelector(`.node[data-id="${id}"]`);}
+function portPos(id,role){const n=nodes.find(x=>x.id===id);const el=nodeEl(id);if(!n||!el)return null;
+  const s=n.s||1;const w=el.offsetWidth*s,h=el.offsetHeight*s; // offsetWidth 不含 transform，需乘缩放
+  return role==="out"?{x:n.x+w,y:n.y+h/2}:{x:n.x,y:n.y+h/2};}
+/* 连线语义：这条线到底传什么（P0 数据总线核心） */
+function edgeInfo(ed){
+  const f=nodes.find(x=>x.id===ed.from);if(!f)return{cls:"",tip:""};
+  if(f.type==="image")return f.data.result
+    ?{cls:"e-img",tip:"图片流：下游图片节点=参考图 / 视频节点=首尾帧"}
+    :{cls:"e-img e-pend",tip:"图片流（待生成）：上游出图后才会传递"};
+  if(f.type==="grid"){const has=(f.data.cells||[]).some(c=>c.result);
+    return has?{cls:"e-img",tip:"图片流：分镜已出图，作为下游参考图"}
+              :{cls:"e-img e-pend",tip:"图片流（待生成）：分镜出图后传递"};}
+  if(f.type==="scene")return {cls:"",tip:"场景流：风格/机位/光线英文修饰词，直接拼进下游主 prompt"};
+  if(f.type==="pose")return {cls:"e-img",tip:"骨架流：骨架PNG作参考图 + 姿势描述进主 prompt（软引导）"};
+  return {cls:"",tip:"文字流：作为下游 prompt 的上下文（次级参考）"};
+}
+function drawEdges(){edgeg.innerHTML="";edges.forEach(ed=>{const a=portPos(ed.from,"out"),b=portPos(ed.to,"in");if(!a||!b)return;
+  const dx=Math.max(40,Math.abs(b.x-a.x)/2);const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+  path.setAttribute("d",`M${a.x},${a.y} C${a.x+dx},${a.y} ${b.x-dx},${b.y} ${b.x},${b.y}`);
+  path.setAttribute("vector-effect","non-scaling-stroke");
+  const info=edgeInfo(ed);if(info.cls)path.setAttribute("class",info.cls);
+  if(info.tip){const t=document.createElementNS("http://www.w3.org/2000/svg","title");t.textContent=info.tip;path.appendChild(t);}
+  path.onclick=()=>{edges=edges.filter(e=>e!==ed);drawEdges();save();};edgeg.appendChild(path);});}
+
+/* ---------- canvas interaction ---------- */
+const canvas=$("#canvas");
+function screenToWorld(cx,cy){const r=canvas.getBoundingClientRect();return {x:(cx-r.left-view.x)/view.scale,y:(cy-r.top-view.y)/view.scale};}
+let pan=null,dragNode=null,linking=null,resizing=null,marquee=null;
+canvas.addEventListener("mousedown",e=>{
+  const port=e.target.closest(".port");const node=e.target.closest(".node");
+  if(e.button===1){ // 中键按住拖动 = 框选（preventDefault 抑制浏览器中键自动滚屏）
+    if(!node){marquee={sx:e.clientX,sy:e.clientY};e.preventDefault();}
+    return;
+  }
+  if(e.button!==0)return; // 右键：节点上=参数面板（节点自身处理），空白=浏览器默认
+  if(port){if(port.dataset.role==="out"){linking={from:port.dataset.id};e.preventDefault();return;}}
+  /* 作品卡片模式：整卡可拖（避开端口/缩放角/删除钮/视频控件/面板表单） */
+  const draggable=node&&!e.target.closest(".port,.rsz,.nx")&&!/VIDEO|TEXTAREA|INPUT|SELECT|BUTTON/.test(e.target.tagName);
+  if(draggable){
+    const id=node.dataset.id;
+    if(!selIds.has(id)){selIds=new Set([id]);refreshSel();}
+    const w=screenToWorld(e.clientX,e.clientY);
+    dragNode={items:[...selIds].map(i=>{const nn=nodes.find(x=>x.id===i);return nn?{n:nn,ox:w.x-nn.x,oy:w.y-nn.y}:null;}).filter(Boolean)};
+    e.preventDefault();return;
+  }
+  if(!node){pan={sx:e.clientX,sy:e.clientY,vx:view.x,vy:view.y};canvas.classList.add("panning");selIds.clear();refreshSel();}
+});
+function updateMarquee(e){const r=$("#main").getBoundingClientRect();const m=$("#marquee");
+  m.style.display="block";
+  m.style.left=(Math.min(marquee.sx,e.clientX)-r.left)+"px";
+  m.style.top=(Math.min(marquee.sy,e.clientY)-r.top)+"px";
+  m.style.width=Math.abs(e.clientX-marquee.sx)+"px";
+  m.style.height=Math.abs(e.clientY-marquee.sy)+"px";}
+function applyMarquee(e){
+  const a=screenToWorld(Math.min(marquee.sx,e.clientX),Math.min(marquee.sy,e.clientY));
+  const b=screenToWorld(Math.max(marquee.sx,e.clientX),Math.max(marquee.sy,e.clientY));
+  selIds=new Set(nodes.filter(n=>{const el=nodeEl(n.id);if(!el)return false;
+    const sc=n.s||1;const w=el.offsetWidth*sc,h=el.offsetHeight*sc;
+    return n.x<b.x&&n.x+w>a.x&&n.y<b.y&&n.y+h>a.y;}).map(n=>n.id));
+  refreshSel();
+  if(selIds.size)flash("已选中 "+selIds.size+" 个节点（拖任一头部=整体移动 · Delete=批量删除）");
+}
+window.addEventListener("mousemove",e=>{
+  if(resizing){
+    const ds=((e.clientX-resizing.sx)/view.scale)/resizing.w0; // 横向拖动量 → 缩放增量
+    const s=Math.min(3,Math.max(.45,resizing.s0+ds));
+    resizing.n.s=Math.round(s*100)/100;
+    const el=nodeEl(resizing.n.id);
+    if(el)el.style.transform=resizing.n.s===1?"":"scale("+resizing.n.s+")";
+    drawEdges();}
+  else if(pan){view.x=pan.vx+(e.clientX-pan.sx);view.y=pan.vy+(e.clientY-pan.sy);applyView();}
+  else if(dragNode){const w=screenToWorld(e.clientX,e.clientY);
+    dragNode.items.forEach(it=>{it.n.x=w.x-it.ox;it.n.y=w.y-it.oy;
+      const el=nodeEl(it.n.id);if(el){el.style.left=it.n.x+"px";el.style.top=it.n.y+"px";}});
+    drawEdges();}
+  else if(linking){drawTmpLink(e.clientX,e.clientY);}
+  else if(marquee){updateMarquee(e);}
+});
+const ACCEPT_IN={text:1,image:1,video:1,grid:1}; // 可消费上游输出的节点；hook 是纯源头（text 在 P1 起吃上下文做 AI 生成）
+window.addEventListener("mouseup",e=>{
+  if(linking){const port=e.target.closest(".port");
+    if(port&&port.dataset.role==="in"&&port.dataset.id!==linking.from){const to=port.dataset.id;
+      const tn=nodes.find(x=>x.id===to);
+      if(tn&&!ACCEPT_IN[tn.type]){flash("✗ 「"+TAGS[tn.type][1]+"」是源头节点，不接受输入，此连线无效");}
+      else if(!edges.some(x=>x.from===linking.from&&x.to===to)){edges.push({id:uid(),from:linking.from,to});save();}}
+    removeTmpLink();linking=null;drawEdges();}
+  if(pan){pan=null;canvas.classList.remove("panning");save();}
+  if(dragNode){dragNode=null;save();}
+  if(resizing){resizing=null;save();}
+  if(marquee){applyMarquee(e);marquee=null;$("#marquee").style.display="none";}
+});
+function drawTmpLink(cx,cy){removeTmpLink();const a=portPos(linking.from,"out");if(!a)return;const b=screenToWorld(cx,cy);
+  const dx=Math.max(40,Math.abs(b.x-a.x)/2);const p=document.createElementNS("http://www.w3.org/2000/svg","path");
+  p.setAttribute("class","tmp");p.id="tmplink";p.setAttribute("d",`M${a.x},${a.y} C${a.x+dx},${a.y} ${b.x-dx},${b.y} ${b.x},${b.y}`);
+  p.setAttribute("vector-effect","non-scaling-stroke");edgeg.appendChild(p);}
+function removeTmpLink(){const t=$("#tmplink");if(t)t.remove();}
+canvas.addEventListener("wheel",e=>{e.preventDefault();const r=canvas.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;
+  const old=view.scale;let s=old*(e.deltaY<0?1.1:0.9);s=Math.min(2.2,Math.max(0.25,s));
+  view.x=mx-(mx-view.x)*(s/old);view.y=my-(my-view.y)*(s/old);view.scale=s;applyView();save();},{passive:false});
+window.addEventListener("keydown",e=>{if((e.key==="Delete"||e.key==="Backspace")&&selIds.size&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){
+  nodes=nodes.filter(x=>!selIds.has(x.id));edges=edges.filter(ed=>!selIds.has(ed.from)&&!selIds.has(ed.to));selIds.clear();renderNodes();save();}});
+
+/* ---------- toolbar ---------- */
+$$("#toolbar [data-add]").forEach(b=>b.onclick=()=>{const c=centerWorld();const n=addNode(b.dataset.add,c.x,c.y);toggleNodeEditor(n,true);});
+$("#fit").onclick=()=>{view={x:200,y:140,scale:1};applyView();};
+$("#export").onclick=exportSpec;
+
+/* ---------- proxy calls ---------- */
+async function postJSON(url,body){const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});return await r.json();}
+async function getJSON(url){const r=await fetch(url);return await r.json();}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* 组装最终图片 prompt：节点自身 prompt（含预设包装）= 主指令在前；上游上下文 = 参考资料在后并截断，避免淹没主指令 */
+function composeImagePrompt(n){
+  const wrap=IMG_PRESETS[n.data.preset||"无"];
+  const hasRef=upstreamImages(n.id).length>0;
+  let p=wrap?wrap(n.data.prompt||"",hasRef):(n.data.prompt||"");
+  if(n.data.ref)p+=" ["+n.data.ref+"]";
+  const sc=effectiveSceneFrag(n);        // 拍摄设置（自身覆盖>继承上游）= 主指令的一部分
+  if(sc)p=p.trim()?p+", "+sc:sc;
+  const ps=upstreamPose(n.id);           // 骨架姿势描述 = 主指令
+  if(ps)p=p.trim()?p+", "+ps:ps;
+  const c=upstreamText(n.id).join("；").slice(0,800);
+  if(c&&p.trim())p+=" || Reference context (style/story, secondary): "+c;
+  else if(c)p=c;
+  return p;
+}
+async function genImage(n){
+  const wrap=IMG_PRESETS[n.data.preset||"无"];
+  if(wrap&&!(n.data.prompt||"").trim()){setStatus(n,"⚠ 选了预设，但 prompt 里还没写主体描述","var(--red)");return;}
+  const prompt=composeImagePrompt(n);
+  if(!prompt.trim()){setStatus(n,"⚠ prompt 是空的（双击节点设置）","var(--red)");return;}
+  const refs=upstreamImages(n.id).slice(0,3);   // 上游图 = 参考图（图生图），最多3张
+  const eng=resolveEngine(n);
+  const reqBody={provider:eng.provider,prompt,aspect:n.data.aspect};
+  if(refs.length)reqBody.references=refs;
+  if(eng.model)reqBody.model=eng.model;
+  setBusy(n,true);const t0=Date.now();
+  const base=refs.length?`⏳ 生成中（带${refs.length}张参考图）…`:"⏳ 生成中…";
+  setStatus(n,base,"var(--accent)");
+  const timer=setInterval(()=>setStatus(n,base+" "+Math.round((Date.now()-t0)/1000)+"s","var(--accent)"),1000);
+  try{
+    const j=await postJSON(CONFIG.proxy+"/image",reqBody);clearInterval(timer);
+    if(j.error){setBusy(n,false);setStatus(n,"✗ "+String(j.error).slice(0,180),"var(--red)");return;}
+    const durl=j.image||j.image_url;
+    if(!durl){setBusy(n,false);setStatus(n,"✗ 返回无图片","var(--red)");return;}
+    if(j.prompt_en)n.data.lastEn=j.prompt_en;
+    setStatus(n,"⏳ 素材归档中…","var(--accent)");
+    const saved=await archive("image",durl,{node:n.data.title||"image",prompt:j.prompt_en||n.data.prompt,provider:CONFIG.provider,refs:refs.length});
+    n.data.result=saved||durl;save();
+    setBusy(n,false);
+    setStatus(n,"✓ "+Math.round((Date.now()-t0)/1000)+"s · "+eng.provider+(j.prompt_en?" · 中→英":"")+(refs.length?` · 参考图×${refs.length}`:"")+(saved?" · 已入库":" · ⚠未入库"),"var(--green)");
+  }catch(e){clearInterval(timer);setBusy(n,false);setStatus(n,"✗ 连不上本地代理，请先双击 start.bat 启动","var(--red)");}
+}
+
+async function genVideo(n){
+  const ctx=upstreamText(n.id).join("；").slice(0,800);
+  const sc=effectiveSceneFrag(n);
+  let core=(n.data.prompt||"").trim();
+  if(sc)core=core?core+", "+sc:sc;       // 拍摄设置进主指令
+  const ps=upstreamPose(n.id);
+  if(ps)core=core?core+", "+ps:ps;       // 骨架姿势进主指令
+  let prompt=core+(ctx&&core?" || Reference context (secondary): "+ctx:(ctx&&!core?ctx:""));
+  if(!prompt.trim()){setStatus(n,"⚠ prompt 是空的（双击节点设置）","var(--red)");return;}
+  const ims=upstreamImages(n.id);               // 第1张=首帧，第2张=尾帧（Seedance）
+  setBusy(n,true);const t0=Date.now();
+  setStatus(n,"⏳ 提交任务…"+(ims.length>=2?"（首尾帧）":ims.length?"（带首帧）":""),"var(--accent)");
+  const fail=(msg,color)=>{setBusy(n,false);setStatus(n,msg,color||"var(--red)");};
+  try{
+    const subBody={prompt,aspect:n.data.aspect,duration:n.data.duration,resolution:"720p"};
+    if(ims[0])subBody.first_frame=ims[0];
+    if(ims[1])subBody.last_frame=ims[1];
+    const sub=await postJSON(CONFIG.proxy+"/video/submit",subBody);
+    if(sub.error){fail("✗ "+String(sub.error).slice(0,180));return;}
+    if(sub.prompt_en){n.data.lastEn=sub.prompt_en;save();}
+    const done=async u=>{
+      n.data.video=u;save();
+      setStatus(n,"⏳ 视频归档中…","var(--accent)");
+      const saved=await archive("video",u,{node:n.data.title||"video",prompt:n.data.prompt,frames:ims.length});
+      if(saved){n.data.video=saved;save();}
+      setBusy(n,false);
+      setStatus(n,"✓ "+Math.round((Date.now()-t0)/1000)+"s"+(saved?" · 已入库":" · ⚠未入库(远端URL可能过期)"),"var(--green)");};
+    if(sub.video_url){done(sub.video_url);return;}
+    const tid=sub.task_id;
+    if(!tid){fail("✗ 未拿到 task_id");return;}
+    for(let i=0;i<90;i++){ // 最长约 7.5 分钟
+      await sleep(5000);
+      setStatus(n,"⏳ 渲染中… "+Math.round((Date.now()-t0)/1000)+"s","var(--accent)");
+      let st;try{st=await getJSON(CONFIG.proxy+"/video/status?id="+encodeURIComponent(tid));}catch(e){continue;}
+      if(st.status==="completed"){if(st.video_url){done(st.video_url);}else{fail("✓ 完成但代理未取到URL","var(--accent2)");}return;}
+      if(st.status==="failed"){fail("✗ 生成失败");return;}
+    }
+    fail("⏱ 超时，稍后可重试","var(--accent2)");
+  }catch(e){fail("✗ 连不上本地代理，请先双击 start.bat 启动");}
+}
+
+/* 场景预览：低成本确认五维组合的视觉效果（Gemini flash 1:1） */
+async function genScenePreview(n){
+  const frag=composeScene(n);
+  if(!frag){setStatus(n,"⚠ 五维全是「无」且无自定义，没东西可预览","var(--red)");return;}
+  setBusy(n,true);const t0=Date.now();
+  setStatus(n,"⏳ 场景预览生成中…","var(--accent)");
+  try{
+    const j=await postJSON(CONFIG.proxy+"/image",{provider:"gemini",model:GMODEL["自动"],prompt:"Scene concept preview, no characters: "+frag,aspect:"1:1"});
+    if(j.error){setBusy(n,false);setStatus(n,"✗ "+String(j.error).slice(0,160),"var(--red)");return;}
+    const durl=j.image||j.image_url;
+    if(!durl){setBusy(n,false);setStatus(n,"✗ 返回无图片","var(--red)");return;}
+    const saved=await archive("image",durl,{node:"场景预览_"+(n.data.title||"scene"),prompt:frag});
+    n.data.preview=saved||durl;save();
+    setBusy(n,false);
+    setStatus(n,"✓ 预览 "+Math.round((Date.now()-t0)/1000)+"s","var(--green)");
+  }catch(e){setBusy(n,false);setStatus(n,"✗ 连不上本地代理，请先双击 start.bat","var(--red)");}
+}
+async function genGrid(n){
+  const ctxStr=upstreamText(n.id).join("；").slice(0,600);
+  const scStr=effectiveSceneFrag(n);            // 拍摄设置（自身覆盖>继承上游）进每格主指令
+  const psStr=upstreamPose(n.id);               // 骨架姿势进每格主指令
+  const refs=upstreamImages(n.id).slice(0,1);   // 上游第1张图 = 全格统一风格参考
+  const todo=n.data.cells.map((c,i)=>({c,i})).filter(o=>(o.c.prompt||"").trim()&&!o.c.result);
+  if(!todo.length){setStatus(n,"没有待生成的格子（需有prompt且未出图）","var(--accent2)");return;}
+  let okc=0;const t0=Date.now();
+  for(let k=0;k<todo.length;k++){
+    const c=todo[k].c, i=todo[k].i;
+    setStatus(n,`⏳ 生成中… ${k+1}/${todo.length}`+(refs.length?"（风格参考图）":"")+`（${Math.round((Date.now()-t0)/1000)}s）`,"var(--accent)");
+    const gp=(n.data.gprompt||"").trim();
+    const prompt=(gp?gp+", ":"")+c.prompt+(scStr?", "+scStr:"")+(psStr?", "+psStr:"")+(ctxStr?" || Reference context (secondary): "+ctxStr:"");
+    const eng=resolveEngine(n);
+    const reqBody={provider:eng.provider,prompt,aspect:n.data.aspect||"1:1"};
+    if(refs.length)reqBody.references=refs;
+    if(eng.model)reqBody.model=eng.model;
+    try{
+      const j=await postJSON(CONFIG.proxy+"/image",reqBody);
+      if(j.error){setStatus(n,"✗ "+(c.label||("镜"+(i+1)))+"："+String(j.error).slice(0,120),"var(--red)");return;}
+      const durl=j.image||j.image_url;
+      if(durl){
+        const saved=await archive("image",durl,{node:(n.data.title||"grid")+"_"+(c.label||("镜"+(i+1))),prompt:c.prompt,provider:CONFIG.provider});
+        c.result=saved||durl;okc++;save();
+        rerenderNode(n); // 马赛克逐格点亮
+        setStatus(n,`⏳ 已出 ${okc}/${todo.length}`,"var(--accent)");
+      }
+    }catch(e){setStatus(n,"✗ 连不上代理，请先双击 start.bat","var(--red)");return;}
+  }
+  drawEdges();
+  setStatus(n,`✓ 完成 ${okc} 张 · ${Math.round((Date.now()-t0)/1000)}s`,"var(--green)");
+}
+
+/* ---------- export run-spec ---------- */
+/* 直接上游（1跳）的图片输出，按连线创建顺序：第1张=参考图1/视频首帧，第2张=尾帧 */
+function upstreamImages(id){const out=[];
+  edges.filter(e=>e.to===id).forEach(e=>{const n=nodes.find(x=>x.id===e.from);if(!n)return;
+    if(n.type==="image"&&n.data.result)out.push(n.data.result);
+    if(n.type==="grid")(n.data.cells||[]).forEach(c=>{if(c.result)out.push(c.result);});
+    if(n.type==="pose")out.push(renderSkeleton(n.data.joints||clonePose("站立"),n.data.yaw));}); // 骨架 PNG（当前视角投影）= 参考图
+  return out;}
+/* 文本节点 AI 生成（卡片模式）：预设 + 上游上下文 → /text → 写回节点内容并重绘 */
+async function genTextCard(n){
+  const preset=TEXT_PRESETS[n.data.preset||"无"];
+  if(!preset){setStatus(n,"先在 ⚙ 参数里选一个预设","var(--accent2)");return;}
+  const ctx=upstreamText(n.id).join("\n");
+  setBusy(n,true);const t0=Date.now();
+  setStatus(n,"⏳ AI 生成中…","var(--accent)");
+  const timer=setInterval(()=>setStatus(n,"⏳ AI 生成中… "+Math.round((Date.now()-t0)/1000)+"s","var(--accent)"),1000);
+  try{
+    const j=await postJSON(CONFIG.proxy+"/text",{prompt:preset.usr,system:preset.sys,context:ctx});
+    clearInterval(timer);setBusy(n,false);
+    if(j.error){setStatus(n,"✗ "+String(j.error).slice(0,160),"var(--red)");return;}
+    n.data.content=j.text||"";save();rerenderNode(n);
+    setStatus(n,"✓ "+Math.round((Date.now()-t0)/1000)+"s（⚙ 可手改，下游按改后内容取用）","var(--green)");
+  }catch(e){clearInterval(timer);setBusy(n,false);setStatus(n,"✗ 连不上本地代理，请先双击 start.bat","var(--red)");}
+}
+/* P1：解析上游「分镜脚本」按 镜N|时长|机位|英文prompt 填入格子（取最后一段英文prompt） */
+function fillGridFromScript(n){
+  const txt=upstreamText(n.id).join("\n");
+  if(!txt.trim()){flash("上游没有文字内容（先连一个文本节点）");return;}
+  const shots=[];
+  txt.split(/\r?\n/).forEach(line=>{
+    const m=line.match(/^(?:.*?[：:])?\s*(?:镜|镜头|Scene|场景)\s*(\d+)\s*[：:.|、]?\s*(.+)$/i); // 允许「标题：镜1…」前缀
+    if(m){const parts=m[2].split("|").map(s=>s.trim()).filter(Boolean);
+      shots.push(parts.length?parts[parts.length-1]:m[2].trim());}
+  });
+  if(!shots.length){flash("没解析到「镜N | … | 英文prompt」格式的行；请用文本节点的「分镜脚本」预设生成");return;}
+  const t=n.data.rows*n.data.cols;
+  shots.slice(0,t).forEach((s,i)=>{n.data.cells[i].prompt=s;delete n.data.cells[i].result;});
+  save();renderNodes();
+  flash(`已填入 ${Math.min(shots.length,t)} 格`+(shots.length>t?`（脚本 ${shots.length} 镜 > 格子 ${t}，多余截断）`:""));
+}
+/* 素材落盘：成功返回代理文件URL（刷新不丢），失败返回 null（前端继续用原数据） */
+async function archive(kind,src,meta){try{
+  const body={kind,meta:meta||{},name:(meta&&meta.node)||kind};
+  if(String(src).startsWith("data:"))body.dataURL=src;else body.url=src;
+  const j=await postJSON(CONFIG.proxy+"/asset",body);
+  if(j&&j.ok&&j.url)return j.url;}catch(e){}return null;}
+function upstreamText(id,seen){seen=seen||new Set();if(seen.has(id))return [];seen.add(id);let out=[];
+  edges.filter(e=>e.to===id).forEach(e=>{const n=nodes.find(x=>x.id===e.from);if(!n)return;out=out.concat(upstreamText(n.id,seen));
+    if(n.type==="text"||n.type==="hook"){const t=(n.data.content||"").trim();if(t)out.push((n.data.title?n.data.title+"：":"")+t);}});return out;}
+function exportSpec(){
+  let lines=["# MiniTV run-spec","# 把整段贴回 Claude，让它用 imagen/seedance 出片","# ────────────────────────",""];
+  const gen=nodes.filter(n=>["image","video","grid"].includes(n.type));
+  if(!gen.length)lines.push("（画布上还没有 图片/视频/分镜 节点）");
+  let i=1;
+  gen.forEach(n=>{const ctx=upstreamText(n.id);
+    if(n.type==="image"){lines.push(`【${i++}】图片 · ${n.data.title||""}`);if(ctx.length)lines.push("  上下文："+ctx.join(" / "));
+      lines.push("  prompt: "+(n.data.prompt||"(空)"));lines.push(`  比例 ${n.data.aspect}`+(n.data.ref?` · 参考图：${n.data.ref}`:""));lines.push("");}
+    else if(n.type==="video"){lines.push(`【${i++}】视频 · ${n.data.title||""}`);if(ctx.length)lines.push("  上下文："+ctx.join(" / "));
+      lines.push("  prompt: "+(n.data.prompt||"(空)"));lines.push(`  比例 ${n.data.aspect} · 时长 ${n.data.duration}s`);lines.push("");}
+    else if(n.type==="grid"){lines.push(`【${i++}】多宫格分镜 · ${n.data.title||""}（${n.data.rows}×${n.data.cols}）`);if(ctx.length)lines.push("  上下文："+ctx.join(" / "));
+      n.data.cells.forEach((c,k)=>{if((c.prompt||"").trim())lines.push(`  - ${c.label||("镜"+(k+1))}: ${c.prompt}`);});lines.push("");}});
+  openModal("⚡ run-spec 导出",
+    `<div class="smallnote" style="margin-bottom:8px;">复制后贴回 Claude，用真实 imagen/seedance 审核流出片。</div><textarea id="specout" readonly></textarea>`,
+    [{t:"复制全部",cls:"primary",fn:()=>{const ta=$("#specout");ta.select();document.execCommand("copy");flash("已复制");}},
+     {t:"下载 .txt",fn:()=>download("run-spec.txt",$("#specout").value,"text/plain")},{t:"关闭",fn:closeModal}]);
+  $("#specout").value=lines.join("\n");
+}
+
+/* ---------- library ---------- */
+function renderLib(){const box=$("#liblist");box.innerHTML="";
+  library.forEach(it=>{const d=document.createElement("div");d.className="libitem";
+    d.innerHTML=`<span class="del" title="删除">✕</span><div class="cat">${it.cat}</div>${escapeHtml(it.text)}`;d.title="点击 → 放到画布";
+    d.onclick=e=>{if(e.target.classList.contains("del"))return;const c=centerWorld();addNode("hook",c.x,c.y,{title:it.cat,content:it.text,cat:it.cat});};
+    d.querySelector(".del").onclick=e=>{e.stopPropagation();library=library.filter(x=>x.id!==it.id);saveLib();renderLib();};box.appendChild(d);});}
+$("#addlib").onclick=()=>{const t=$("#libtext").value.trim();if(!t)return;library.unshift({id:uid(),cat:$("#libcat").value,text:t});$("#libtext").value="";saveLib();renderLib();};
+$("#libtext").addEventListener("keydown",e=>{if(e.key==="Enter")$("#addlib").click();});
+
+/* ---------- templates ---------- */
+function renderTmpl(){const box=$("#tmpllist");box.innerHTML="";
+  if(!templates.length){box.innerHTML='<div class="smallnote">还没有模板。搭好流程后点上面的按钮存起来。</div>';return;}
+  templates.forEach(t=>{const d=document.createElement("div");d.className="tmplitem";
+    d.innerHTML=`<span class="nm" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span>`;
+    const apply=document.createElement("button");apply.textContent="套用";apply.onclick=()=>applyTemplate(t);
+    const del=document.createElement("button");del.textContent="✕";del.style.color="var(--red)";
+    del.onclick=()=>{templates=templates.filter(x=>x.id!==t.id);saveTmpl();renderTmpl();};
+    d.appendChild(apply);d.appendChild(del);box.appendChild(d);});}
+$("#savetmpl").onclick=()=>{if(!nodes.length){flash("画布是空的");return;}
+  const name=prompt("给这个工作流模板起个名：","模板 "+(templates.length+1));if(!name)return;
+  templates.unshift({id:uid(),name,nodes:JSON.parse(JSON.stringify(lean(nodes))),edges:JSON.parse(JSON.stringify(edges))});saveTmpl();renderTmpl();flash("已存为模板");};
+function applyTemplate(t){
+  const map={};const newNodes=t.nodes.map(n=>{const nn=JSON.parse(JSON.stringify(n));const id=uid();map[n.id]=id;nn.id=id;nn.x+=60;nn.y+=60;return nn;});
+  const newEdges=t.edges.map(e=>({id:uid(),from:map[e.from],to:map[e.to]}));
+  const slots=newNodes.filter(n=>n.type==="text"&&n.data.isInput);
+  const doInsert=()=>{nodes=nodes.concat(newNodes);edges=edges.concat(newEdges);selIds.clear();renderNodes();save();closeModal();flash("已套用模板：「"+t.name+"」");};
+  if(!slots.length){doInsert();return;}
+  let html='<div class="smallnote" style="margin-bottom:10px;">该模板有 '+slots.length+' 个「输入位」，替换文字即可复用（留空则保留原文）：</div>';
+  slots.forEach((s,i)=>{html+=`<div class="fillrow"><div class="lbl">${escapeHtml(s.data.title||("输入位"+(i+1)))}</div><textarea data-slot="${i}" rows="2">${escapeHtml(s.data.content||"")}</textarea></div>`;});
+  openModal("◧ 套用模板 · 换词复用",html,[{t:"插入画布",cls:"primary",fn:()=>{$$("#mbody [data-slot]").forEach(ta=>{slots[+ta.dataset.slot].data.content=ta.value;});doInsert();}},{t:"取消",fn:closeModal}]);
+}
+
+/* ---------- file ops ---------- */
+$("#exportjson").onclick=()=>download("minitv-workflow.json",JSON.stringify({nodes:lean(nodes),edges,view},null,2),"application/json");
+$("#importjson").onclick=()=>$("#fileinput").click();
+$("#fileinput").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);nodes=d.nodes||[];edges=d.edges||[];if(d.view)view=d.view;applyView();renderNodes();save();flash("已导入");}catch(err){flash("文件解析失败");}};r.readAsText(f);e.target.value="";};
+$("#clearall").onclick=()=>{if(confirm("清空当前画布？模板和钩子库不受影响。")){nodes=[];edges=[];renderNodes();save();}};
+
+/* ---------- modal & misc ---------- */
+function openModal(title,bodyHtml,buttons){$("#mtitle").textContent=title;$("#mbody").innerHTML=bodyHtml;const ft=$("#mft");ft.innerHTML="";
+  (buttons||[]).forEach(b=>{const btn=document.createElement("button");btn.textContent=b.t;if(b.cls)btn.className=b.cls;btn.onclick=b.fn;ft.appendChild(btn);});$("#mask").classList.add("show");}
+function closeModal(){$("#mask").classList.remove("show");}
+$("#mclose").onclick=closeModal;$("#mask").onclick=e=>{if(e.target.id==="mask")closeModal();};
+let flashT;function flash(msg){let f=$("#flash");if(!f){f=document.createElement("div");f.id="flash";f.style.cssText="position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--green);color:#06210f;padding:8px 16px;border-radius:8px;z-index:200;font-size:13px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.4);";document.body.appendChild(f);}f.textContent=msg;f.style.display="block";clearTimeout(flashT);flashT=setTimeout(()=>f.style.display="none",1600);}
+function download(name,content,type){const b=(content instanceof Blob)?content:new Blob([content],{type});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);}
+function dataURLtoBlob(durl){const parts=durl.split(",");const mime=(parts[0].match(/:(.*?);/)||[])[1]||"image/png";const bin=atob(parts[1]);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime});}
+
+/* ---------- provider switch + proxy health ---------- */
+$("#provsel").onchange=()=>{CONFIG.provider=$("#provsel").value;localStorage.setItem(LS.prov,CONFIG.provider);};
+async function pingProxy(){try{const h=await getJSON(CONFIG.proxy+"/health");$("#proxydot").className="dot on";$("#proxydot").title="代理已连接 · OpenAI:"+(h.openai?"OK":"无")+" Gemini:"+(h.gemini?"OK":"无")+" Seedance:"+(h.seedance?"OK":"无");}catch(e){$("#proxydot").className="dot off";$("#proxydot").title="代理未启动：双击 start.bat";}}
+
+/* collapsible */
+$$(".sect .hd").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
+
+/* ---------- password gate ---------- */
+function gate(onPass){
+  if(!CONFIG.gatePassword){onPass();return;}
+  try{if(localStorage.getItem(LS.gate)===CONFIG.gatePassword){onPass();return;}}catch(e){} // 记住登录状态
+  const ov=document.createElement("div");
+  ov.style.cssText="position:fixed;inset:0;z-index:500;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;";
+  ov.innerHTML=`<div style="font-size:20px;">🌊 MiniTV</div><div style="font-size:12px;color:var(--dim);">请输入访问密码</div>
+    <input id="gpw" type="password" style="width:220px;text-align:center;" placeholder="密码">
+    <button id="gbtn" class="primary" style="width:120px;">进入</button><div id="gerr" style="font-size:11px;color:var(--red);height:14px;"></div>`;
+  document.body.appendChild(ov);
+  const tryit=()=>{if($("#gpw").value===CONFIG.gatePassword){try{localStorage.setItem(LS.gate,CONFIG.gatePassword);}catch(e){}ov.remove();onPass();}else{$("#gerr").textContent="密码错误";$("#gpw").value="";}};
+  $("#gbtn").onclick=tryit;$("#gpw").addEventListener("keydown",e=>{if(e.key==="Enter")tryit();});setTimeout(()=>$("#gpw").focus(),50);
+}
+
+/* ---------- boot ---------- */
+function boot(){
+  load();$("#provsel").value=CONFIG.provider;applyView();renderNodes();renderLib();renderTmpl();pingProxy();setInterval(pingProxy,15000);
+  if(!nodes.length){
+    const t=addNode("text",0,0,{title:"创意/脚本",content:"30秒海战钩子：开局舰队被巨浪掀翻，玩家3秒内反击翻盘。",isInput:true});
+    const h=addNode("hook",0,200,{title:"钩子",content:"99%的船长都在第3关沉没，你呢？",cat:"钩子"});
+    const img=addNode("image",330,40,{title:"首图",prompt:"cinematic realistic stormy ocean, a giant warship tilting in a huge wave, dramatic low angle, red warning UI",aspect:"9:16",model:"自动",ref:""});
+    const vid=addNode("video",660,90,{title:"15s钩子视频",prompt:"camera pushes in as the warship rights itself and fires a broadside, explosive water spray",aspect:"9:16",duration:8,frame:"无"});
+    edges.push({id:uid(),from:t.id,to:img.id},{id:uid(),from:h.id,to:img.id},{id:uid(),from:img.id,to:vid.id});
+    renderNodes();save();
+  }
+}
+gate(boot);
+</script>
+</body>
+</html>
